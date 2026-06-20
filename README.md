@@ -1,165 +1,155 @@
-<br /><br />
+# Plane (Self-Hosted) — Digital Kingsmen Fork
 
-<p align="center">
-<a href="https://plane.so">
-  <img src="https://media.docs.plane.so/logo/plane_github_readme.png" alt="Plane Logo" width="400">
-</a>
-</p>
-<p align="center"><b>Modern project management for all teams</b></p>
+This is DK's fork of [Plane](https://github.com/makeplane/plane), an open-source project management tool. It runs fully self-hosted via Docker on macOS using colima.
 
-<p align="center">
-    <a href="https://plane.so/"><b>Website</b></a> •
-    <a href="https://forum.plane.so"><b>Forum</b></a> •
-    <a href="https://x.com/planepowers"><b>X</b></a> •
-    <a href="https://docs.plane.so/"><b>Documentation</b></a>
-</p>
+**Live instance:** http://localhost:8282  
+**Fork:** https://github.com/jonahjtr/plane  
+**Upstream:** https://github.com/makeplane/plane
 
-<p>
-    <a href="https://app.plane.so/#gh-light-mode-only" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-top.webp"
-        alt="Plane Screens"
-        width="100%"
-      />
-    </a>
-</p>
+---
 
-Meet [Plane](https://plane.so/), an open-source project management tool to track issues, run ~sprints~ cycles, and manage product roadmaps without the chaos of managing the tool itself. 🧘‍♀️
+## Quick Start / Stop
 
-> Plane is evolving every day. Your suggestions, ideas, and reported bugs help us immensely. Do not hesitate to join in the conversation on [Forum](https://forum.plane.so) or raise a GitHub issue. We read everything and respond to most.
+```bash
+# Start everything (colima VM + all containers):
+./start.sh
 
-## 🚀 Installation
+# Stop everything:
+./stop.sh
+```
 
-Getting started with Plane is simple. Choose the setup that works best for you:
+That's it. `start.sh` boots the colima VM, starts all 12 Docker containers, and waits until the app is responding at http://localhost:8282.
 
-- **Plane Cloud**
-  Sign up for a free account on [Plane Cloud](https://app.plane.so)—it's the fastest way to get up and running without worrying about infrastructure.
+---
 
-- **Self-host Plane**
-  Prefer full control over your data and infrastructure? Install and run Plane on your own servers. Follow our detailed [deployment guides](https://developers.plane.so/self-hosting/overview) to get started.
+## What's Running (12 containers)
 
-| Installation methods | Docs link                                                                                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docker               | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://developers.plane.so/self-hosting/methods/docker-compose)         |
-| Kubernetes           | [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://developers.plane.so/self-hosting/methods/kubernetes) |
+| Container      | What it does                              |
+|----------------|-------------------------------------------|
+| `proxy`        | Caddy reverse proxy (port 8282 → all)     |
+| `web`          | Next.js main app                          |
+| `admin`        | Next.js admin panel (`/god-mode`)         |
+| `space`        | Next.js public pages (`/spaces`)          |
+| `api`          | Django REST API (Gunicorn)                |
+| `bgworker`     | Celery background worker                  |
+| `beatworker`   | Celery beat scheduler                     |
+| `plane-live`   | Real-time collab server (HocusPocus)      |
+| `plane-db`     | PostgreSQL 15                             |
+| `plane-redis`  | Valkey (Redis-compatible)                 |
+| `plane-mq`     | RabbitMQ                                  |
+| `plane-minio`  | MinIO (S3-compatible file storage)        |
 
-`Instance admins` can configure instance settings with [God mode](https://developers.plane.so/self-hosting/govern/instance-admin).
+---
 
-## 🌟 Features
+## Prerequisites
 
-- **Work Items**
-  Efficiently create and manage tasks with a robust rich text editor that supports file uploads. Enhance organization and tracking by adding sub-properties and referencing related issues.
+- **colima** — lightweight Docker VM for macOS (`brew install colima`)
+- **docker + docker-compose** — (`brew install docker docker-compose`)
+- **docker-buildx** — (`brew install docker-buildx`)
+- Docker CLI plugins dir configured in `~/.docker/config.json`:
+  ```json
+  { "cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"] }
+  ```
 
-- **Cycles**
-  Maintain your team’s momentum with Cycles. Track progress effortlessly using burn-down charts and other insightful tools.
+---
 
-- **Modules**
-  Simplify complex projects by dividing them into smaller, manageable modules.
+## Colima VM Specs
 
-- **Views**
-  Customize your workflow by creating filters to display only the most relevant issues. Save and share these views with ease.
+The VM runs with **4 CPU / 8GB RAM / 40GB disk**. These are set in `start.sh`. If you need to change them, edit the `colima start` line. Don't go below 4GB RAM — Plane needs it.
 
-- **Pages**
-  Capture and organize ideas using Plane Pages, complete with AI capabilities and a rich text editor. Format text, insert images, add hyperlinks, or convert your notes into actionable items.
+---
 
-- **Analytics**
-  Access real-time insights across all your Plane data. Visualize trends, remove blockers, and keep your projects moving forward.
+## Key Files
 
-## 🛠️ Local development
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | All container definitions |
+| `.env` | Root env: DB creds, ports, MinIO keys |
+| `apps/api/.env` | API env: DB URL, Redis, base URLs |
+| `apps/proxy/Caddyfile.ce` | Reverse proxy routing config |
+| `start.sh` | One-command startup |
+| `stop.sh` | One-command shutdown |
 
-See [CONTRIBUTING](./CONTRIBUTING.md)
+---
 
-## ⚙️ Built with
+## Custom Changes (vs upstream)
 
-[![React Router](https://img.shields.io/badge/-React%20Router-CA4245?logo=react-router&style=for-the-badge&logoColor=white)](https://reactrouter.com/)
-[![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=green)](https://www.djangoproject.com/)
-[![Node JS](https://img.shields.io/badge/node.js-339933?style=for-the-badge&logo=Node.js&logoColor=white)](https://nodejs.org/en)
+1. **Caddyfile.ce** — Fixed global config block ordering (upstream bug)
+2. **docker-compose.yml** — Added missing env vars for proxy and live service
+3. **apps/api/.env** — All base URLs point to `localhost:8282` (through proxy) instead of individual container ports
+4. **Top nav** — Removed "Star us on GitHub" link, replaced with custom text
+5. **Port** — Runs on `8282` instead of `80` (no root needed)
 
-## 📸 Screenshots
+---
 
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-work-items.webp"
-        alt="Plane Views"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-cycles.webp"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-modules.webp"
-        alt="Plane Cycles and Modules"
-        width="100%"
-      />
-    </a>
-  </p>
-  <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-views.webp"
-        alt="Plane Analytics"
-        width="100%"
-      />
-    </a>
-  </p>
-   <p>
-    <a href="https://plane.so" target="_blank">
-      <img
-        src="https://media.docs.plane.so/GitHub-readme/github-analytics.webp"
-        alt="Plane Pages"
-        width="100%"
-      />
-    </a>
-  </p>
-</p>
+## Rebuilding After Code Changes
 
-## 📝 Documentation
+If you edit frontend code (anything in `apps/web`, `apps/admin`, `apps/space`):
 
-Explore Plane's [product documentation](https://docs.plane.so/) and [developer documentation](https://developers.plane.so/) to learn about features, setup, and usage.
+```bash
+# Rebuild just the changed app:
+docker compose build web        # or admin, space, live, proxy
+docker compose up -d --force-recreate web
+```
 
-## ❤️ Community
+If you edit API code (`apps/api`):
 
-Join the Plane community on [GitHub Discussions](https://github.com/orgs/makeplane/discussions) and our [Forum](https://forum.plane.so). We follow a [Code of conduct](https://github.com/makeplane/plane/blob/master/CODE_OF_CONDUCT.md) in all our community channels.
+```bash
+docker compose build api
+docker compose up -d --force-recreate api worker beat-worker
+```
 
-Feel free to ask questions, report bugs, participate in discussions, share ideas, request features, or showcase your projects. We’d love to hear from you!
+---
 
-## 🛡️ Security
+## Pulling Updates from Upstream
 
-If you discover a security vulnerability in Plane, please report it responsibly instead of opening a public issue. We take all legitimate reports seriously and will investigate them promptly. See [Security policy](https://github.com/makeplane/plane/blob/master/SECURITY.md) for more info.
+```bash
+git fetch upstream
+git merge upstream/preview
+# Resolve any conflicts, then rebuild:
+docker compose build
+docker compose up -d
+```
 
-To disclose any security issues, please email us at security@plane.so.
+---
 
-## 🤝 Contributing
+## Useful Commands
 
-There are many ways you can contribute to Plane:
+```bash
+# Check container status:
+docker ps
 
-- Report [bugs](https://github.com/makeplane/plane/issues/new?assignees=srinivaspendem%2Cpushya22&labels=%F0%9F%90%9Bbug&projects=&template=--bug-report.yaml&title=%5Bbug%5D%3A+) or submit [feature requests](https://github.com/makeplane/plane/issues/new?assignees=srinivaspendem%2Cpushya22&labels=%E2%9C%A8feature&projects=&template=--feature-request.yaml&title=%5Bfeature%5D%3A+).
-- Review the [documentation](https://docs.plane.so/) and submit [pull requests](https://github.com/makeplane/docs) to improve it—whether it's fixing typos or adding new content.
-- Talk or write about Plane or any other ecosystem integration and [let us know](https://forum.plane.so)!
-- Show your support by upvoting [popular feature requests](https://github.com/makeplane/plane/issues).
+# View logs for a container:
+docker logs api
+docker logs proxy
 
-Please read [CONTRIBUTING.md](https://github.com/makeplane/plane/blob/master/CONTRIBUTING.md) for details on the process for submitting pull requests to us.
+# Restart a specific service:
+docker compose restart api
 
-### Repo activity
+# Full rebuild from scratch:
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 
-![Plane Repo Activity](https://repobeats.axiom.co/api/embed/2523c6ed2f77c082b7908c33e2ab208981d76c39.svg "Repobeats analytics image")
+# Shell into a container:
+docker exec -it api bash
+```
 
-### We couldn't have done this without you.
+---
 
-<a href="https://github.com/makeplane/plane/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=makeplane/plane" />
-</a>
+## Troubleshooting
 
-## License
+**Proxy keeps restarting?**  
+Check `docker logs proxy`. Usually a Caddyfile syntax issue. The env vars `SITE_ADDRESS`, `CERT_EMAIL`, etc. must be passed through in `docker-compose.yml`.
 
-This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/makeplane/plane/blob/master/LICENSE.txt).
+**Login redirects to wrong port?**  
+Check `apps/api/.env` — all `*_BASE_URL` values should be `http://localhost:8282`.
+
+**plane-live restarting?**  
+Needs `API_BASE_URL`, `LIVE_SERVER_SECRET_KEY`, and `REDIS_HOST` set. These are in the `live` service's `environment` block in `docker-compose.yml`.
+
+**Colima won't start?**  
+Try `colima delete` then `colima start --cpu 4 --memory 8 --disk 40`. This wipes the VM but Docker volumes (DB data) persist if you used named volumes.
+
+**Out of disk in the VM?**  
+`colima ssh -- df -h`. If full, prune: `docker system prune -a --volumes`.
