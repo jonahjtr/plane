@@ -23,6 +23,7 @@ echo -e "${YELLOW}Waiting for services to be ready...${NC}"
 for i in {1..30}; do
   if curl -s -o /dev/null -w "%{http_code}" http://localhost:8282/ 2>/dev/null | grep -q "200"; then
     echo -e "${GREEN}✓ Plane is live at http://localhost:8282${NC}"
+    open -a "Google Chrome" http://localhost:8282
     exit 0
   fi
   sleep 2
