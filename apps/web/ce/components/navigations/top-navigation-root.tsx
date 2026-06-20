@@ -78,6 +78,7 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
           />
         </Tooltip>
         <HelpMenuRoot />
+        <span className="flex flex-shrink-0 items-center rounded-sm bg-layer-2 px-3 py-1.5 text-11 font-medium">Brian is a bitch</span>
         <div className="flex size-8 items-center justify-center rounded-md hover:bg-layer-1-hover">
           <UserMenuRoot />
         </div>
