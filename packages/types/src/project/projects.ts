@@ -185,6 +185,7 @@ export type TProjectGroup = {
   name: string;
   parent: string | null;
   color: string | null;
+  logo_props?: TLogoProps;
   sort_order: number;
   workspace: string;
   created_at?: string;

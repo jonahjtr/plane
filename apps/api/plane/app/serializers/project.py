@@ -247,6 +247,7 @@ class ProjectGroupSerializer(BaseSerializer):
             "name",
             "parent",
             "color",
+            "logo_props",
             "sort_order",
             "workspace",
             "created_at",
