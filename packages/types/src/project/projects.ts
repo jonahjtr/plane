@@ -40,6 +40,8 @@ export interface IPartialProject {
   created_by?: string;
   updated_by?: string;
   intake_count?: number;
+  // DK fork: sidebar grouping. null when ungrouped.
+  group?: string | null;
 }
 
 export interface IProject extends IPartialProject {
@@ -176,3 +178,18 @@ export interface ISearchIssueResponse {
 export type TPartialProject = IPartialProject;
 
 export type TProject = TPartialProject & IProject;
+
+// DK fork: sidebar project folders.
+export type TProjectGroup = {
+  id: string;
+  name: string;
+  parent: string | null;
+  color: string | null;
+  logo_props?: TLogoProps;
+  sort_order: number;
+  workspace: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+};

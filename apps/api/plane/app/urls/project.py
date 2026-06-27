@@ -18,10 +18,26 @@ from plane.app.views import (
     UserProjectRolesEndpoint,
     ProjectArchiveUnarchiveEndpoint,
     ProjectMemberPreferenceEndpoint,
+    ProjectGroupViewSet,
 )
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/project-groups/",
+        ProjectGroupViewSet.as_view({"get": "list", "post": "create"}),
+        name="project-groups",
+    ),
+    path(
+        "workspaces/<str:slug>/project-groups/<uuid:pk>/",
+        ProjectGroupViewSet.as_view(
+            {
+                "patch": "partial_update",
+                "delete": "destroy",
+            }
+        ),
+        name="project-groups-detail",
+    ),
     path(
         "workspaces/<str:slug>/projects/",
         ProjectViewSet.as_view({"get": "list", "post": "create"}),

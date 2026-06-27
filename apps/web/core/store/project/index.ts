@@ -5,6 +5,8 @@
  */
 
 import type { CoreRootStore } from "../root.store";
+import type { IProjectGroupStore } from "./project-group.store";
+import { ProjectGroupStore } from "./project-group.store";
 import type { IProjectPublishStore } from "./project-publish.store";
 import { ProjectPublishStore } from "./project-publish.store";
 import type { IProjectStore } from "./project.store";
@@ -16,16 +18,19 @@ export interface IProjectRootStore {
   project: IProjectStore;
   projectFilter: IProjectFilterStore;
   publish: IProjectPublishStore;
+  group: IProjectGroupStore;
 }
 
 export class ProjectRootStore {
   project: IProjectStore;
   projectFilter: IProjectFilterStore;
   publish: IProjectPublishStore;
+  group: IProjectGroupStore;
 
   constructor(_root: CoreRootStore) {
     this.project = new ProjectStore(_root);
     this.projectFilter = new ProjectFilterStore(_root);
     this.publish = new ProjectPublishStore(this);
+    this.group = new ProjectGroupStore(_root);
   }
 }

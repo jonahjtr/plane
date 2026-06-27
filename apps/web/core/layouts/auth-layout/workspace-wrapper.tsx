@@ -36,6 +36,7 @@ import {
 import { useFavorite } from "@/hooks/store/use-favorite";
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
+import { useProjectGroup } from "@/hooks/store/use-project-group";
 import { useProjectState } from "@/hooks/store/use-project-state";
 import { useWorkspace } from "@/hooks/store/use-workspace";
 import { useUser, useUserPermissions } from "@/hooks/store/user";
@@ -53,6 +54,7 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
   // store hooks
   const { signOut, data: currentUser } = useUser();
   const { fetchPartialProjects } = useProject();
+  const { fetchProjectGroups } = useProjectGroup();
   const { fetchFavorite } = useFavorite();
   const {
     workspace: { fetchWorkspaceMembers },
@@ -88,6 +90,12 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
   useSWR(
     workspaceSlug && currentWorkspace ? WORKSPACE_PARTIAL_PROJECTS(workspaceSlug.toString()) : null,
     workspaceSlug && currentWorkspace ? () => fetchPartialProjects(workspaceSlug.toString()) : null,
+    { revalidateIfStale: false, revalidateOnFocus: false }
+  );
+  // DK fork: fetching workspace project groups (sidebar folders)
+  useSWR(
+    workspaceSlug && currentWorkspace ? `WORKSPACE_PROJECT_GROUPS_${workspaceSlug.toString()}` : null,
+    workspaceSlug && currentWorkspace ? () => fetchProjectGroups(workspaceSlug.toString()) : null,
     { revalidateIfStale: false, revalidateOnFocus: false }
   );
   // fetch workspace members

@@ -11,7 +11,7 @@ import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
 // components
 import { SidebarWrapper } from "@/components/sidebar/sidebar-wrapper";
 import { SidebarFavoritesMenu } from "@/components/workspace/sidebar/favorites/favorites-menu";
-import { SidebarProjectsList } from "@/components/workspace/sidebar/projects-list";
+import { SidebarProjectGroups } from "@/components/workspace/sidebar/project-groups/sidebar-project-groups";
 import { SidebarQuickActions } from "@/components/workspace/sidebar/quick-actions";
 import { SidebarMenuItems } from "@/components/workspace/sidebar/sidebar-menu-items";
 // hooks
@@ -40,8 +40,8 @@ export const AppSidebar = observer(function AppSidebar() {
       {canPerformWorkspaceMemberActions && !isFavoriteEmpty && <SidebarFavoritesMenu />}
       {/* Teams List */}
       <SidebarTeamsList />
-      {/* Projects List */}
-      <SidebarProjectsList />
+      {/* Projects List (DK fork: grouped) */}
+      <SidebarProjectGroups />
     </SidebarWrapper>
   );
 });

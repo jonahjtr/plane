@@ -118,6 +118,14 @@ class Project(BaseModel):
     # external_id for imports
     external_source = models.CharField(max_length=255, null=True, blank=True)
     external_id = models.CharField(max_length=255, blank=True, null=True)
+    # DK fork: sidebar grouping. Nullable so ungrouped projects are unaffected.
+    group = models.ForeignKey(
+        "db.ProjectGroup",
+        on_delete=models.SET_NULL,
+        related_name="projects",
+        null=True,
+        blank=True,
+    )
 
     def __init__(self, *args, **kwargs):
         # Track if timezone is provided, if so, don't override it with the workspace timezone when saving

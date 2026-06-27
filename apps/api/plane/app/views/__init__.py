@@ -24,6 +24,10 @@ from .project.member import (
     ProjectMemberPreferenceEndpoint,
 )
 
+from .project.group import (
+    ProjectGroupViewSet,
+)
+
 from .user.base import (
     UserEndpoint,
     UpdateUserOnBoardedEndpoint,
