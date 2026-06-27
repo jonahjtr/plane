@@ -5,14 +5,17 @@
  */
 
 // components
+import { useState, useCallback } from "react";
 import { observer } from "mobx-react";
 import { useParams, usePathname } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@plane/utils";
 import { TopNavPowerK } from "@/components/navigation";
 import { HelpMenuRoot } from "@/components/workspace/sidebar/help-section/root";
 import { UserMenuRoot } from "@/components/workspace/sidebar/user-menu-root";
 import { WorkspaceMenuRoot } from "@/components/workspace/sidebar/workspace-menu-root";
 import { useAppRailPreferences } from "@/hooks/use-navigation-preferences";
+import { useAppRouter } from "@/hooks/use-app-router";
 import { Tooltip } from "@plane/propel/tooltip";
 import { AppSidebarItem } from "@/components/sidebar/sidebar-item";
 import { InboxIcon } from "@plane/propel/icons";
@@ -25,12 +28,26 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
   // router
   const { workspaceSlug } = useParams();
   const pathname = usePathname();
+  const router = useAppRouter();
 
   // store hooks
   const { unreadNotificationsCount, getUnreadNotificationsCount } = useWorkspaceNotifications();
   const { preferences } = useAppRailPreferences();
 
   const showLabel = preferences.displayMode === "icon_with_label";
+
+  // Refresh state — used to spin the icon and disable the button while Next re-fetches RSC
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    // router.refresh() re-fetches the current route's RSC payload. We give the
+    // spinner a moment to breathe so the user sees the action register, then
+    // reset state once the next render cycle lands.
+    router.refresh();
+    window.setTimeout(() => setIsRefreshing(false), 600);
+  }, [isRefreshing, router]);
 
   // Fetch notification count
   useSWR(
@@ -54,6 +71,22 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
       <div className="flex-1 shrink-0">
         <WorkspaceMenuRoot variant="top-navigation" />
       </div>
+      {/* Refresh */}
+      <Tooltip tooltipContent={isRefreshing ? "Refreshing…" : "Refresh"} position="bottom">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          aria-label="Refresh"
+          className="ml-1 mr-1 flex size-8 shrink-0 items-center justify-center rounded-md text-tertiary transition-colors hover:bg-layer-1-hover hover:text-icon-secondary disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw
+            className={cn("size-4 transition-transform", {
+              "animate-spin": isRefreshing,
+            })}
+          />
+        </button>
+      </Tooltip>
       {/* Power K Search */}
       <div className="shrink-0">
         <TopNavPowerK />

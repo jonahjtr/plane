@@ -1,0 +1,3 @@
+# Never commit local backups (DB dumps contain real data, patches are local restore points)
+*
+!.gitignore
