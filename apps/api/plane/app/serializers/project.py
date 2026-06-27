@@ -20,6 +20,7 @@ from plane.db.models import (
     ProjectIdentifier,
     DeployBoard,
     ProjectPublicMember,
+    ProjectGroup,
     IssueSequence,
 )
 from plane.utils.content_validator import (
@@ -234,3 +235,41 @@ class ProjectPublicMemberSerializer(BaseSerializer):
         model = ProjectPublicMember
         fields = "__all__"
         read_only_fields = ["workspace", "project", "member"]
+
+
+class ProjectGroupSerializer(BaseSerializer):
+    """DK fork: sidebar project folders."""
+
+    class Meta:
+        model = ProjectGroup
+        fields = [
+            "id",
+            "name",
+            "parent",
+            "color",
+            "sort_order",
+            "workspace",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
+        read_only_fields = ["workspace", "deleted_at"]
+
+    def validate_parent(self, parent):
+        # Enforce single-level nesting: a subgroup cannot itself be a parent,
+        # and a group cannot be its own parent.
+        if parent is None:
+            return parent
+        if self.instance and parent.id == self.instance.id:
+            raise serializers.ValidationError(detail="A group cannot be its own parent.")
+        if parent.parent_id is not None:
+            raise serializers.ValidationError(
+                detail="Project groups can only nest one level deep."
+            )
+        # If this group already has children, it cannot become a subgroup.
+        if self.instance and self.instance.children.filter(deleted_at__isnull=True).exists():
+            raise serializers.ValidationError(
+                detail="This group has subgroups and cannot be moved under another group."
+            )
+        return parent
