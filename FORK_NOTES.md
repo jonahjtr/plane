@@ -39,11 +39,27 @@ New model `ProjectGroup` (table `project_groups`):
 - `workspace` FK → Workspace (CASCADE)
 - `name` CharField(255)
 - `parent` self-FK, nullable (CASCADE) — enforces 1-level nesting in app logic
-- `color` CharField, nullable — for the sidebar badge/dot
+- `color` CharField, nullable — fallback sidebar dot when no emoji/icon set
+- `logo_props` JSONField — emoji or material icon (same shape Project uses),
+  rendered by Plane's `<Logo>` component
 - `sort_order` FloatField — ordering within its level
 - standard BaseModel fields (id uuid, created_by, updated_by, timestamps)
 - soft-delete via existing mixin
 - unique (name, parent, workspace) where deleted_at is null
+
+Migrations:
+- `0122_project_groups` — model + Project.group FK
+- `0123_project_group_logo_props` — adds logo_props JSONField
+
+Sidebar UX (frontend):
+- emoji/icon picker (reuses `@plane/propel` EmojiPicker + `<Logo>`)
+- drag-and-drop a project between groups (pragmatic-drag-and-drop):
+  project rows are draggables; group headers + the Ungrouped section are
+  drop targets; drop calls `assignProjectToGroup`
+- subgroups render with tree-guide lines + progressive indentation
+  (INDENT_PER_LEVEL=14px) to read like a folder tree
+- filter input, count badges, per-group menu (edit/add subgroup/delete),
+  per-project "move to" menu
 
 New field on `Project`:
 - `group` FK → ProjectGroup, nullable, `on_delete=SET_NULL`,
