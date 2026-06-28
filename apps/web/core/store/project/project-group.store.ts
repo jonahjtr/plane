@@ -24,6 +24,7 @@ export interface IProjectGroupStore {
   // observables
   groupMap: Record<string, TProjectGroup>;
   loader: boolean;
+  assignmentVersion: number;
   // computed
   groupIds: string[];
   rootGroupIds: string[];
@@ -45,6 +46,8 @@ export class ProjectGroupStore implements IProjectGroupStore {
   // observables
   groupMap: Record<string, TProjectGroup> = {};
   loader: boolean = false;
+  // bump this on every group assignment so computedFn invalidates
+  assignmentVersion: number = 0;
   // root
   rootStore: CoreRootStore;
   // services
@@ -55,6 +58,7 @@ export class ProjectGroupStore implements IProjectGroupStore {
       // observables
       groupMap: observable,
       loader: observable,
+      assignmentVersion: observable,
       // computed
       groupIds: computed,
       rootGroupIds: computed,
@@ -100,11 +104,14 @@ export class ProjectGroupStore implements IProjectGroupStore {
 
   /**
    * Project ids belonging to a group. Pass null for ungrouped projects.
-   * Reads from the project store's projectMap directly so MobX can track
-   * the observable dependency (computedFn + getProjectById has reactivity
-   * issues with deep field access through another computedFn).
+   *
+   * Reads assignmentVersion to force MobX to invalidate this computedFn
+   * when a project is moved between groups (the version bump is the signal
+   * that the project.group field changed somewhere in the projectMap).
    */
   getProjectIdsByGroup = computedFn((groupId: string | null): string[] => {
+    // touch the version counter so MobX knows this computed depends on it
+    void this.assignmentVersion;
     const { joinedProjectIds } = this.rootStore.projectRoot.project;
     const projectMap = this.rootStore.projectRoot.project.projectMap;
     return joinedProjectIds.filter((pid) => {
@@ -177,12 +184,15 @@ export class ProjectGroupStore implements IProjectGroupStore {
       [groupId, ...subIds].forEach((id) => {
         delete this.groupMap[id];
       });
+      // bump version so project lists re-compute (projects became ungrouped)
+      this.assignmentVersion++;
     });
   };
 
   /**
    * Assign (or unassign with groupId=null) a project to a group.
-   * Optimistically updates the project map, then persists via the API.
+   * Optimistically updates the project map AND bumps assignmentVersion
+   * so all getProjectIdsByGroup computeds invalidate immediately.
    */
   assignProjectToGroup = async (
     workspaceSlug: string,
@@ -197,6 +207,7 @@ export class ProjectGroupStore implements IProjectGroupStore {
       if (projectMap[projectId]) {
         set(projectMap, [projectId, "group"], groupId);
       }
+      this.assignmentVersion++;
     });
 
     try {
@@ -209,6 +220,7 @@ export class ProjectGroupStore implements IProjectGroupStore {
         if (projectMap[projectId]) {
           set(projectMap, [projectId, "group"], previousGroup);
         }
+        this.assignmentVersion++;
       });
       throw error;
     }
