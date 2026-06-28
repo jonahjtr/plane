@@ -100,13 +100,17 @@ export class ProjectGroupStore implements IProjectGroupStore {
 
   /**
    * Project ids belonging to a group. Pass null for ungrouped projects.
-   * Reads from the project store's joined projects so it stays in sync.
+   * Reads from the project store's projectMap directly so MobX can track
+   * the observable dependency (computedFn + getProjectById has reactivity
+   * issues with deep field access through another computedFn).
    */
   getProjectIdsByGroup = computedFn((groupId: string | null): string[] => {
-    const { joinedProjectIds, getProjectById } = this.rootStore.projectRoot.project;
+    const { joinedProjectIds } = this.rootStore.projectRoot.project;
+    const projectMap = this.rootStore.projectRoot.project.projectMap;
     return joinedProjectIds.filter((pid) => {
-      const project = getProjectById(pid);
-      const pGroup = project?.group ?? null;
+      const project = projectMap[pid];
+      if (!project) return false;
+      const pGroup = project.group ?? null;
       return pGroup === groupId;
     });
   });
@@ -178,15 +182,35 @@ export class ProjectGroupStore implements IProjectGroupStore {
 
   /**
    * Assign (or unassign with groupId=null) a project to a group.
-   * Delegates the write to the project store so the project map updates too.
+   * Optimistically updates the project map, then persists via the API.
    */
   assignProjectToGroup = async (
     workspaceSlug: string,
     projectId: string,
     groupId: string | null
   ): Promise<void> => {
-    await this.rootStore.projectRoot.project.updateProject(workspaceSlug, projectId, {
-      group: groupId,
+    const projectMap = this.rootStore.projectRoot.project.projectMap;
+    const previousGroup = projectMap[projectId]?.group ?? null;
+
+    // optimistic update — move the project in the UI immediately
+    runInAction(() => {
+      if (projectMap[projectId]) {
+        set(projectMap, [projectId, "group"], groupId);
+      }
     });
+
+    try {
+      await this.rootStore.projectRoot.project.updateProject(workspaceSlug, projectId, {
+        group: groupId,
+      });
+    } catch (error) {
+      // rollback on failure
+      runInAction(() => {
+        if (projectMap[projectId]) {
+          set(projectMap, [projectId, "group"], previousGroup);
+        }
+      });
+      throw error;
+    }
   };
 }

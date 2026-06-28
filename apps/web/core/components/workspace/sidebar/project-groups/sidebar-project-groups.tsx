@@ -205,10 +205,19 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
         onDrop: ({ source }) => {
           setIsDropOver(false);
           const data = source.data;
-          if (!isDragData(data) || !workspaceSlug) return;
-          assignProjectToGroup(workspaceSlug.toString(), data.projectId, group.id).catch(() =>
-            setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not move project." })
-          );
+          if (!isDragData(data) || !workspaceSlug) {
+            console.log("[DnD] Invalid drop data or no workspaceSlug", { data, workspaceSlug });
+            return;
+          }
+          console.log("[DnD] Moving project", data.projectId, "from group", data.fromGroupId, "to group", group.id);
+          assignProjectToGroup(workspaceSlug.toString(), data.projectId, group.id)
+            .then(() => {
+              console.log("[DnD] Project moved successfully");
+            })
+            .catch((err) => {
+              console.error("[DnD] Failed to move project:", err);
+              setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: `Could not move project: ${err?.message || "Unknown error"}` });
+            });
         },
       })
     );
@@ -359,10 +368,19 @@ const UngroupedSection = observer(function UngroupedSection({ filter }: { filter
       onDrop: ({ source }) => {
         setIsDropOver(false);
         const data = source.data;
-        if (!isDragData(data) || !workspaceSlug) return;
-        assignProjectToGroup(workspaceSlug.toString(), data.projectId, null).catch(() =>
-          setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not move project." })
-        );
+        if (!isDragData(data) || !workspaceSlug) {
+          console.log("[DnD Ungrouped] Invalid drop data or no workspaceSlug", { data, workspaceSlug });
+          return;
+        }
+        console.log("[DnD Ungrouped] Moving project", data.projectId, "from group", data.fromGroupId, "to ungrouped");
+        assignProjectToGroup(workspaceSlug.toString(), data.projectId, null)
+          .then(() => {
+            console.log("[DnD Ungrouped] Project moved to ungrouped successfully");
+          })
+          .catch((err) => {
+            console.error("[DnD Ungrouped] Failed to move project:", err);
+            setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: `Could not move project: ${err?.message || "Unknown error"}` });
+          });
       },
     });
   }, [workspaceSlug, assignProjectToGroup]);
