@@ -38,6 +38,7 @@ export interface IProjectGroupStore {
   createProjectGroup: (workspaceSlug: string, data: Partial<TProjectGroup>) => Promise<TProjectGroup>;
   updateProjectGroup: (workspaceSlug: string, groupId: string, data: Partial<TProjectGroup>) => Promise<TProjectGroup>;
   deleteProjectGroup: (workspaceSlug: string, groupId: string) => Promise<void>;
+  reorderGroup: (workspaceSlug: string, groupId: string, newSortOrder: number) => Promise<void>;
   // assignment
   assignProjectToGroup: (workspaceSlug: string, projectId: string, groupId: string | null) => Promise<void>;
 }
@@ -67,6 +68,7 @@ export class ProjectGroupStore implements IProjectGroupStore {
       createProjectGroup: action,
       updateProjectGroup: action,
       deleteProjectGroup: action,
+      reorderGroup: action,
       assignProjectToGroup: action,
     });
     this.rootStore = _rootStore;
@@ -187,6 +189,32 @@ export class ProjectGroupStore implements IProjectGroupStore {
       // bump version so project lists re-compute (projects became ungrouped)
       this.assignmentVersion++;
     });
+  };
+
+  /**
+   * Move a group to a new sort_order. Used by drag-to-reorder.
+   * The UI computes a value between neighboring groups' sort_orders
+   * so the move is a single PATCH (no cascading re-numbering needed).
+   */
+  reorderGroup = async (workspaceSlug: string, groupId: string, newSortOrder: number): Promise<void> => {
+    const previous = this.groupMap[groupId]?.sort_order;
+    runInAction(() => {
+      if (this.groupMap[groupId]) {
+        set(this.groupMap, [groupId, "sort_order"], newSortOrder);
+      }
+      this.assignmentVersion++;
+    });
+    try {
+      await this.projectGroupService.updateProjectGroup(workspaceSlug, groupId, { sort_order: newSortOrder });
+    } catch (error) {
+      runInAction(() => {
+        if (this.groupMap[groupId] && previous !== undefined) {
+          set(this.groupMap, [groupId, "sort_order"], previous);
+        }
+        this.assignmentVersion++;
+      });
+      throw error;
+    }
   };
 
   /**

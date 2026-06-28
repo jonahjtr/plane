@@ -56,10 +56,17 @@ Sidebar UX (frontend):
 - drag-and-drop a project between groups (pragmatic-drag-and-drop):
   project rows are draggables; group headers + the Ungrouped section are
   drop targets; drop calls `assignProjectToGroup`
+- drag-to-reorder groups (same level only — no reparenting in this phase):
+  group headers are draggables + drop targets; drop calls `reorderGroup`
+  which PATCHes a midpoint sort_order so the move is a single API call
 - subgroups render with tree-guide lines + progressive indentation
   (INDENT_PER_LEVEL=14px) to read like a folder tree
 - filter input, count badges, per-group menu (edit/add subgroup/delete),
   per-project "move to" menu
+- `ProjectGroupModal` (create/edit): autofocus name, Esc closes, Enter
+  saves, server validation errors surface inline next to the name field
+  (not just in a toast), preview badge at the top shows the current
+  icon+color as you edit
 
 New field on `Project`:
 - `group` FK → ProjectGroup, nullable, `on_delete=SET_NULL`,

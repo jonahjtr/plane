@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane imports
@@ -48,39 +48,66 @@ export const ProjectGroupModal = observer(function ProjectGroupModal(props: Prop
   const [logoProps, setLogoProps] = useState<TLogoProps | undefined>(undefined);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  // refs
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Reset state when opening/closing
   useEffect(() => {
     if (isOpen) {
       setName(group?.name ?? "");
       setColor(group?.color ?? GROUP_COLORS[0]);
       setLogoProps(group?.logo_props && group.logo_props.in_use ? group.logo_props : undefined);
+      setNameError(null);
+      setIsPickerOpen(false);
+      // autofocus the name field on open (after a tick so the modal is mounted)
+      setTimeout(() => nameInputRef.current?.focus(), 50);
     }
   }, [isOpen, group]);
 
+  // Esc closes the modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isPickerOpen) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, isPickerOpen, onClose]);
+
   const hasLogo = !!logoProps?.in_use;
+  const trimmedName = name.trim();
+  const isValid = trimmedName.length > 0;
 
   const handleSubmit = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || !workspaceSlug) return;
+    if (!isValid || !workspaceSlug) return;
+    setNameError(null);
     setIsSubmitting(true);
     const payload: Partial<TProjectGroup> = {
-      name: trimmed,
+      name: trimmedName,
       color,
       logo_props: logoProps ?? ({} as TLogoProps),
     };
     try {
       if (group) {
         await updateProjectGroup(workspaceSlug.toString(), group.id, payload);
-        setToast({ type: TOAST_TYPE.SUCCESS, title: "Group updated", message: `Renamed to “${trimmed}”.` });
+        setToast({ type: TOAST_TYPE.SUCCESS, title: "Group updated", message: `Renamed to "${trimmedName}".` });
       } else {
         await createProjectGroup(workspaceSlug.toString(), { ...payload, parent: parentId });
-        setToast({ type: TOAST_TYPE.SUCCESS, title: "Group created", message: `“${trimmed}” added.` });
+        setToast({ type: TOAST_TYPE.SUCCESS, title: "Group created", message: `"${trimmedName}" added.` });
       }
       onClose();
     } catch (error: any) {
-      const detail =
-        error?.name?.[0] || error?.parent?.[0] || error?.error || "Something went wrong. Please try again.";
-      setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: String(detail) });
+      // surface server validation errors inline next to the name field
+      const nameErr = error?.name?.[0];
+      const parentErr = error?.parent?.[0];
+      if (nameErr) setNameError(String(nameErr));
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Error",
+        message: nameErr || parentErr || error?.error || "Something went wrong. Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -89,14 +116,34 @@ export const ProjectGroupModal = observer(function ProjectGroupModal(props: Prop
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="w-[440px] rounded-lg bg-surface-1 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-15 font-semibold text-primary">
-          {group ? "Edit group" : parentId ? "New subgroup" : "New group"}
-        </h3>
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        className="w-[440px] rounded-lg bg-surface-1 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header: title + current glyph preview */}
+        <div className="mb-4 flex items-center gap-3">
+          <span
+            className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-md border border-subtle bg-layer-2"
+            style={!hasLogo ? { borderColor: color } : undefined}
+          >
+            {hasLogo ? (
+              <Logo logo={logoProps} size={18} />
+            ) : (
+              <span className="size-3 rounded-full" style={{ backgroundColor: color }} />
+            )}
+          </span>
+          <h3 className="text-15 font-semibold text-primary">
+            {group ? "Edit group" : parentId ? "New subgroup" : "New group"}
+          </h3>
+        </div>
 
         {/* Icon + name row */}
-        <div className="flex items-end gap-3">
+        <div className="flex items-start gap-3">
           <div>
             <label className="mb-1 block text-13 font-medium text-secondary">Icon</label>
             <EmojiPicker
@@ -137,22 +184,32 @@ export const ProjectGroupModal = observer(function ProjectGroupModal(props: Prop
           <div className="flex-1">
             <label className="mb-1 block text-13 font-medium text-secondary">Name</label>
             <Input
-              autoFocus
+              ref={nameInputRef as any}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (nameError) setNameError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSubmit();
               }}
               placeholder="e.g. Clients"
-              className="w-full"
+              className={cn("w-full", nameError && "border-danger-text")}
+              hasError={!!nameError}
             />
+            {nameError && (
+              <p className="mt-1 text-11 text-danger-text">{nameError}</p>
+            )}
           </div>
         </div>
 
-        {/* Fallback color (used when no emoji/icon set) */}
+        {/* Fallback color */}
         <div className="mt-4">
           <label className="mb-2 block text-13 font-medium text-secondary">
-            Color {hasLogo && <span className="text-placeholder">(used if you remove the icon)</span>}
+            Color{" "}
+            {hasLogo && (
+              <span className="text-placeholder">(used if you remove the icon)</span>
+            )}
           </label>
           <div className="flex flex-wrap items-center gap-2">
             {GROUP_COLORS.map((c) => (
@@ -180,13 +237,22 @@ export const ProjectGroupModal = observer(function ProjectGroupModal(props: Prop
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="neutral-primary" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button variant="primary" size="sm" onClick={handleSubmit} loading={isSubmitting} disabled={!name.trim()}>
-            {group ? "Save" : "Create"}
-          </Button>
+        <div className="mt-6 flex items-center justify-between gap-2">
+          <span className="text-11 text-placeholder">Esc to cancel · Enter to save</span>
+          <div className="flex gap-2">
+            <Button variant="neutral-primary" size="sm" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSubmit}
+              loading={isSubmitting}
+              disabled={!isValid}
+            >
+              {group ? "Save" : "Create"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

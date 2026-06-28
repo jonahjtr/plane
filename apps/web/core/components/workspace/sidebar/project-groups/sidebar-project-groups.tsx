@@ -25,12 +25,15 @@ import { useProjectGroup } from "@/hooks/store/use-project-group";
 import { SidebarProjectsListItem } from "../projects-list-item";
 import { ProjectGroupModal } from "./project-group-modal";
 
-const DND_TYPE = "PROJECT_GROUP_ITEM";
+const PROJECT_DND = "PROJECT_GROUP_ITEM";
+const GROUP_DND = "PROJECT_GROUP_GROUP";
 const INDENT_PER_LEVEL = 14; // px
 
-type DragData = { type: typeof DND_TYPE; projectId: string; fromGroupId: string | null };
+type ProjectDragData = { type: typeof PROJECT_DND; projectId: string; fromGroupId: string | null };
+type GroupDragData = { type: typeof GROUP_DND; groupId: string; depth: number };
 
-const isDragData = (data: Record<string, unknown>): data is DragData => data.type === DND_TYPE;
+const isProjectDrag = (data: Record<string, unknown>): data is ProjectDragData => data.type === PROJECT_DND;
+const isGroupDrag = (data: Record<string, unknown>): data is GroupDragData => data.type === GROUP_DND;
 
 /** Small group glyph: emoji/icon logo if set, else a colored dot. */
 const GroupGlyph = observer(function GroupGlyph({ group, size = 14 }: { group: TProjectGroup; size?: number }) {
@@ -65,7 +68,7 @@ const ProjectRow = observer(function ProjectRow(props: {
     if (!el) return;
     return draggable({
       element: el,
-      getInitialData: (): DragData => ({ type: DND_TYPE, projectId, fromGroupId }),
+      getInitialData: (): ProjectDragData => ({ type: PROJECT_DND, projectId, fromGroupId }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });
@@ -172,12 +175,21 @@ type GroupSectionProps = {
 const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
   const { group, depth, filter, onEdit, onAddSub } = props;
   const { workspaceSlug } = useParams();
-  const { getProjectIdsByGroup, getSubgroupIds, deleteProjectGroup, getGroupById, assignProjectToGroup } =
-    useProjectGroup();
+  const {
+    getProjectIdsByGroup,
+    getSubgroupIds,
+    deleteProjectGroup,
+    getGroupById,
+    assignProjectToGroup,
+    reorderGroup,
+    groupMap,
+  } = useProjectGroup();
   const { getProjectById } = useProject();
 
   const headerRef = useRef<HTMLDivElement>(null);
   const [isDropOver, setIsDropOver] = useState(false);
+  const [isGroupDragging, setIsGroupDragging] = useState(false);
+  const [isGroupDropOver, setIsGroupDropOver] = useState(false);
 
   const subgroupIds = depth === 0 ? getSubgroupIds(group.id) : [];
   const directProjectIds = getProjectIdsByGroup(group.id);
@@ -192,36 +204,72 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
     [directProjectIds, filter, getProjectById]
   );
 
-  // group header is a drop target — drop a project here to move it into this group
+  // group header is:
+  //  - draggable (carries its own group, for reorder)
+  //  - drop target for projects (move project into this group)
+  //  - drop target for other groups at the same level (reorder)
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     return combine(
+      draggable({
+        element: el,
+        getInitialData: (): GroupDragData => ({ type: GROUP_DND, groupId: group.id, depth }),
+        onDragStart: () => setIsGroupDragging(true),
+        onDrop: () => setIsGroupDragging(false),
+      }),
       dropTargetForElements({
         element: el,
-        canDrop: ({ source }) => isDragData(source.data) && (source.data as DragData).fromGroupId !== group.id,
+        // projects: not already in this group
+        // groups: only from the same level (no reparenting in this phase)
+        canDrop: ({ source }) => {
+          if (isProjectDrag(source.data)) {
+            return (source.data as ProjectDragData).fromGroupId !== group.id;
+          }
+          if (isGroupDrag(source.data)) {
+            const d = source.data as GroupDragData;
+            return d.groupId !== group.id && d.depth === depth;
+          }
+          return false;
+        },
         onDragEnter: () => setIsDropOver(true),
         onDragLeave: () => setIsDropOver(false),
         onDrop: ({ source }) => {
           setIsDropOver(false);
+          setIsGroupDropOver(false);
           const data = source.data;
-          if (!isDragData(data) || !workspaceSlug) {
-            console.log("[DnD] Invalid drop data or no workspaceSlug", { data, workspaceSlug });
+          if (!workspaceSlug) return;
+
+          if (isGroupDrag(data)) {
+            const gd = data as GroupDragData;
+            // compute a new sort_order that places the dragged group just above
+            // this one. The midpoint between this group's sort_order and the
+            // previous sibling's gives a stable single-PATCH reorder.
+            const siblings = depth === 0
+              ? Object.values(groupMap).filter((g) => !g.parent).sort((a, b) => a.sort_order - b.sort_order)
+              : Object.values(groupMap).filter((g) => g.parent === group.parent).sort((a, b) => a.sort_order - b.sort_order);
+            const myIndex = siblings.findIndex((s) => s.id === group.id);
+            const previousSort = myIndex > 0 ? siblings[myIndex - 1].sort_order : 0;
+            // place dragged group just above `group`:
+            // new = (previous + this) / 2
+            const newSort = (previousSort + group.sort_order) / 2;
+            reorderGroup(workspaceSlug.toString(), gd.groupId, newSort).catch(() =>
+              setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not reorder group." })
+            );
             return;
           }
-          console.log("[DnD] Moving project", data.projectId, "from group", data.fromGroupId, "to group", group.id);
-          assignProjectToGroup(workspaceSlug.toString(), data.projectId, group.id)
-            .then(() => {
-              console.log("[DnD] Project moved successfully");
-            })
-            .catch((err) => {
-              console.error("[DnD] Failed to move project:", err);
-              setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: `Could not move project: ${err?.message || "Unknown error"}` });
-            });
+
+          if (isProjectDrag(data)) {
+            const pd = data as ProjectDragData;
+            assignProjectToGroup(workspaceSlug.toString(), pd.projectId, group.id).catch(() =>
+              setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not move project." })
+            );
+            return;
+          }
         },
       })
     );
-  }, [group.id, workspaceSlug, assignProjectToGroup]);
+  }, [group.id, depth, group.sort_order, group.parent, workspaceSlug, assignProjectToGroup, reorderGroup, groupMap]);
 
   const handleDelete = async () => {
     if (!workspaceSlug) return;
@@ -257,6 +305,10 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
                 style={{ left: `${8 + (depth - 1) * INDENT_PER_LEVEL + 6}px` }}
               />
             )}
+            {/* drag handle (appears on hover, used to reorder group) */}
+            <span className="mr-1 hidden flex-shrink-0 cursor-grab text-placeholder group-hover/header:inline-block">
+              <GripVertical className="size-3.5" />
+            </span>
             <Disclosure.Button
               as="button"
               type="button"
@@ -362,13 +414,13 @@ const UngroupedSection = observer(function UngroupedSection({ filter }: { filter
     if (!el) return;
     return dropTargetForElements({
       element: el,
-      canDrop: ({ source }) => isDragData(source.data) && (source.data as DragData).fromGroupId !== null,
+      canDrop: ({ source }) => isProjectDrag(source.data) && (source.data as ProjectDragData).fromGroupId !== null,
       onDragEnter: () => setIsDropOver(true),
       onDragLeave: () => setIsDropOver(false),
       onDrop: ({ source }) => {
         setIsDropOver(false);
         const data = source.data;
-        if (!isDragData(data) || !workspaceSlug) {
+        if (!isProjectDrag(data) || !workspaceSlug) {
           console.log("[DnD Ungrouped] Invalid drop data or no workspaceSlug", { data, workspaceSlug });
           return;
         }
@@ -463,14 +515,20 @@ export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
 
       <div className="group flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-placeholder">
         <span className="text-13 font-semibold text-placeholder">Projects</span>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="hidden items-center gap-1 rounded px-1 py-0.5 text-11 font-medium text-placeholder hover:bg-layer-1-hover hover:text-secondary group-hover:flex"
-          aria-label="New group"
-        >
-          <Plus className="size-3.5" /> Group
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={openCreate}
+            className="grid h-5 w-5 place-items-center rounded text-placeholder hover:bg-layer-1-hover hover:text-secondary"
+            aria-label="New group"
+            title="New group"
+          >
+            <Plus className="size-3.5" />
+          </button>
+          <span className="hidden items-center gap-1 rounded px-1 py-0.5 text-11 font-medium text-placeholder group-hover:flex">
+            Group
+          </span>
+        </div>
       </div>
 
       {hasAnyProjects && (
