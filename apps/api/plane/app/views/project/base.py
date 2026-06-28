@@ -189,6 +189,7 @@ class ProjectViewSet(BaseViewSet):
             "updated_at",
             "created_by",
             "updated_by",
+            "group",  # DK fork: sidebar project groups
         )
 
         if WorkspaceMember.objects.filter(
