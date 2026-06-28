@@ -117,3 +117,46 @@ packages/i18n/src/types/keys.generated.ts
 
 # Local security notes (not for version control)
 /security/
+
+# --- DK fork: defensive ignores ---
+# Backup / restore point artifacts (DB dumps, restore patches).
+# The .backups/ dir has its own .gitignore, but mirror the rule at the
+# root so the dir is ignored even if the inner .gitignore is missing.
+.backups/
+*.sql
+*.dump
+
+# .claude/ scratch that may leak personal info. NOTE: upstream commits
+# Claude Code skills under .claude/skills/ (branch-name, release-notes,
+# translate, etc.) — we don't ignore the whole dir, only the
+# user/workspace-specific state files. Keep the .skills/ allowlist
+# explicit so new skills still commit.
+.claude/settings.local.json
+.claude/projects/
+.claude/file-history/
+.claude/statsig/
+.claude/todos/
+
+# Editor / shell scratch that can leak personal info or paths
+.cursor/
+.aider*
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Playwright / browser-mcp ephemeral state
+.playwright-mcp/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Local-only Docker compose overrides (any *-local.yml on top of stock)
+docker-compose.local.yml
+*-override.yml
+
+# Coverage / typecheck cache that the user might enable later
+coverage/
+*.lcov
+.nyc_output/
