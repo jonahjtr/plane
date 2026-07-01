@@ -244,6 +244,10 @@ type ChildRowProps = {
   parentId?: string | null;
 };
 
+const INDENT_PX = 20; // how much child rows are pushed right of the column edge.
+// 20px = the parent card's chevron button width (5 = w-5 = 20px), so the
+// child's left edge lines up with the parent's card left edge.
+
 const BoardChildRow = observer(function BoardChildRow(props: ChildRowProps) {
   const draggableId = (() => {
     let id = props.issueId;
@@ -252,22 +256,24 @@ const BoardChildRow = observer(function BoardChildRow(props: ChildRowProps) {
     return id;
   })();
 
-  // The card itself takes full column width (no inner padding/margin
-  // stealing space from it). The tree-guide line is drawn as absolute
-  // pseudo-elements that don't affect the card's box. The "sub" badge
-  // for orphaned children floats above the card.
+  // The child row is indented by INDENT_PX from the column's left edge.
+  // The tree-guide vertical line sits at the start of the indent (left: 9px,
+  // centered in the indent gutter). The horizontal branch hooks into the
+  // card. The card itself is the full width of the indent row, so it
+  // is visibly narrower than the parent card above it.
   return (
-    <div className="relative my-0.5">
-      {/* tree-guide vertical line: 1px wide, in the indent gutter */}
+    <div className="relative my-0.5" style={{ marginLeft: INDENT_PX }}>
+      {/* tree-guide vertical line: 1px wide, runs from the top of this row
+          down to the top of the next sibling */}
       <span
         className="pointer-events-none absolute top-0 bottom-0 w-px bg-strong"
-        style={{ left: "10px" }}
+        style={{ left: `-${INDENT_PX / 2}px` }}
         aria-hidden
       />
       {/* tree-guide horizontal branch into the card */}
       <span
-        className="pointer-events-none absolute top-3.5 h-px w-2.5 bg-strong"
-        style={{ left: "10px" }}
+        className="pointer-events-none absolute top-3.5 h-px bg-strong"
+        style={{ left: `-${INDENT_PX / 2}px`, width: `${INDENT_PX / 2}px` }}
         aria-hidden
       />
       {/* orphaned badge: top-right corner of the card, doesn't affect width */}
