@@ -252,39 +252,50 @@ const BoardChildRow = observer(function BoardChildRow(props: ChildRowProps) {
     return id;
   })();
 
+  // The card itself takes full column width (no inner padding/margin
+  // stealing space from it). The tree-guide line is drawn as absolute
+  // pseudo-elements that don't affect the card's box. The "sub" badge
+  // for orphaned children floats above the card.
   return (
-    <div className="relative pl-5">
-      <span className="pointer-events-none absolute left-2 top-0 h-full w-px bg-strong" aria-hidden />
-      <span className="pointer-events-none absolute left-2 top-3.5 h-px w-3 bg-strong" aria-hidden />
-      <div className="flex items-start gap-1">
-        {props.orphaned && (
-          <span
-            className="mt-1 inline-flex items-center gap-1 rounded bg-layer-2 px-1.5 py-0.5 text-10 uppercase tracking-wide text-placeholder"
-            title={props.parentId ? `Parent in another column: ${props.parentId}` : "Parent in another column"}
-          >
-            <CornerDownRight className="size-3" />
-            sub
-          </span>
-        )}
-        <div className="flex-1">
-          <KanbanIssueBlock
-            issueId={props.issueId}
-            groupId={props.groupId}
-            subGroupId={props.sub_group_id}
-            shouldRenderByDefault
-            issuesMap={props.issuesMap}
-            displayProperties={props.displayProperties}
-            updateIssue={props.updateIssue}
-            quickActions={props.quickActions}
-            draggableId={draggableId}
-            canDropOverIssue={props.canDropOverIssue}
-            canDragIssuesInCurrentGrouping={props.canDragIssuesInCurrentGrouping}
-            canEditProperties={props.canEditProperties}
-            scrollableContainerRef={props.scrollableContainerRef}
-            isEpic={props.isEpic}
-          />
-        </div>
-      </div>
+    <div className="relative my-0.5">
+      {/* tree-guide vertical line: 1px wide, in the indent gutter */}
+      <span
+        className="pointer-events-none absolute top-0 bottom-0 w-px bg-strong"
+        style={{ left: "10px" }}
+        aria-hidden
+      />
+      {/* tree-guide horizontal branch into the card */}
+      <span
+        className="pointer-events-none absolute top-3.5 h-px w-2.5 bg-strong"
+        style={{ left: "10px" }}
+        aria-hidden
+      />
+      {/* orphaned badge: top-right corner of the card, doesn't affect width */}
+      {props.orphaned && (
+        <span
+          className="pointer-events-none absolute right-2 top-1 z-10 inline-flex items-center gap-1 rounded bg-layer-2/90 px-1.5 py-0.5 text-10 uppercase tracking-wide text-placeholder backdrop-blur-sm"
+          title={props.parentId ? `Parent in another column: ${props.parentId}` : "Parent in another column"}
+        >
+          <CornerDownRight className="size-3" />
+          sub
+        </span>
+      )}
+      <KanbanIssueBlock
+        issueId={props.issueId}
+        groupId={props.groupId}
+        subGroupId={props.sub_group_id}
+        shouldRenderByDefault
+        issuesMap={props.issuesMap}
+        displayProperties={props.displayProperties}
+        updateIssue={props.updateIssue}
+        quickActions={props.quickActions}
+        draggableId={draggableId}
+        canDropOverIssue={props.canDropOverIssue}
+        canDragIssuesInCurrentGrouping={props.canDragIssuesInCurrentGrouping}
+        canEditProperties={props.canEditProperties}
+        scrollableContainerRef={props.scrollableContainerRef}
+        isEpic={props.isEpic}
+      />
     </div>
   );
 });
