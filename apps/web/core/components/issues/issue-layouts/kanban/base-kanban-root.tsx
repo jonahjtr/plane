@@ -6,6 +6,7 @@
 
 import type { FC } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GitBranch } from "lucide-react";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -233,6 +234,10 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
 
   const collapsedGroups = issuesFilter?.issueFilters?.kanbanFilters || { group_by: [], sub_group_by: [] };
 
+  // DK fork: hierarchy filter — when on, group issues by parent in the kanban
+  // and render children indented with a tree-guide line. Session-only.
+  const [hierarchyEnabled, setHierarchyEnabled] = useState(true);
+
   return (
     <>
       <DeleteIssueModal
@@ -260,6 +265,22 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
         </div>
       </div>
       <IssueLayoutHOC layout={EIssueLayoutTypes.KANBAN}>
+        {/* DK fork: board-level hierarchy toggle. Session-only. */}
+        <div className="flex items-center justify-end gap-2 px-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setHierarchyEnabled((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-12 font-medium transition-colors ${
+              hierarchyEnabled
+                ? "border-accent-primary/40 bg-accent-primary/10 text-accent-primary"
+                : "border-strong bg-surface-1 text-tertiary hover:bg-layer-1-hover"
+            }`}
+            title="Group issues by parent/child in each column. When on, child issues render indented under their parents with a tree-guide line."
+          >
+            <GitBranch className="size-3.5" />
+            {hierarchyEnabled ? "Grouped by parent" : "Flat list"}
+          </button>
+        </div>
         <div
           className={`horizontal-scrollbar relative flex scrollbar-lg h-full w-full bg-surface-2 ${sub_group_by ? "vertical-scrollbar overflow-y-auto" : "overflow-x-auto overflow-y-hidden"}`}
           ref={scrollableContainerRef}
@@ -288,6 +309,7 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
                 handleOnDrop={handleOnDrop}
                 loadMoreIssues={fetchMoreIssues}
                 isEpic={isEpic}
+                hierarchyEnabled={hierarchyEnabled}
               />
             </div>
           </div>

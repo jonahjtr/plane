@@ -62,6 +62,8 @@ export interface IKanBan {
   disableIssueCreation?: boolean;
   addIssuesToView?: (issueIds: string[]) => Promise<TIssue>;
   canEditProperties: (projectId: string | undefined) => boolean;
+  // DK fork: when true, group issues by parent in each column with tree rendering
+  hierarchyEnabled?: boolean;
   scrollableContainerRef?: MutableRefObject<HTMLDivElement | null>;
   handleOnDrop: (source: GroupDropLocation, destination: GroupDropLocation) => Promise<void>;
   showEmptyGroup?: boolean;
@@ -96,6 +98,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
     dropErrorMessage,
     subGroupIndex = 0,
     isEpic = false,
+    hierarchyEnabled = true,
   } = props;
   // i18n
   // store hooks
@@ -228,6 +231,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     loadMoreIssues={loadMoreIssues}
                     handleOnDrop={handleOnDrop}
                     isEpic={isEpic}
+                    hierarchyEnabled={hierarchyEnabled}
                   />
                 </RenderIfVisible>
               )}
