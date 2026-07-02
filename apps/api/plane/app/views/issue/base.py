@@ -846,6 +846,13 @@ class IssuePaginatedViewSet(BaseViewSet):
                     .values("count")
                 )
             )
+            .annotate(
+                sub_issue_ids=Coalesce(  # DK fork: array of child issue ids
+                    ArrayAgg("parent_issue__id", distinct=True, filter=~Q(parent_issue__id__isnull=True)),
+                    Value([]),
+                    output_field=ArrayField(UUIDField()),
+                )
+            )
         )
 
     def process_paginated_result(self, fields, results, timezone):
@@ -891,6 +898,7 @@ class IssuePaginatedViewSet(BaseViewSet):
             "link_count",
             "attachment_count",
             "sub_issues_count",
+            "sub_issue_ids",  # DK fork: child issue ids for hierarchy rendering
         ]
 
         if str(is_description_required).lower() == "true":
