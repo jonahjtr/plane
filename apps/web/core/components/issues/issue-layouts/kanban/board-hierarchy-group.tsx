@@ -5,34 +5,32 @@
  *
  * DK fork: board-level parent/child hierarchy rendering.
  *
+ * Layout (each parent-with-children is a flat list — parent card
+ * then children, no wrapper around the parent that could interfere
+ * with the parent's own drag/drop target):
+ *
  *   ┌──────────────────────────────┐
  *   │  parent card (100% width)    │
  *   └──────────────────────────────┘
- *    │ ▾ 2
- *    ├──▸ ┌───────────────────────┐
- *    │    │ child card (80%)      │
- *    │    └───────────────────────┘
- *    └──▸ ┌───────────────────────┐
- *         │ child card (80%)      │
- *         └───────────────────────┘
+ *    ▾ 2                            <- toggle strip (its own row)
+ *    │   ├─▸ ┌─────────────────┐
+ *    │   │  │ child (80%)      │
+ *    │   │  └─────────────────┘
+ *    └──▸ ┌─────────────────┐
+ *         │ child (80%)      │
+ *         └─────────────────┘
  *
- * The spine drops from under the parent's left edge, runs straight down
- * the 20% gutter, and hooks into each child with a horizontal branch
- * ending in an arrowhead. The spine terminates at the last child (└).
+ * The spine and arrows are drawn as `pointer-events-none` absolute
+ * elements that don't participate in the DOM hierarchy of the cards,
+ * so the parent and child each keep their own drag/drop target intact.
  *
- * NOTE: lines use inline `var(--border-strong)` — `bg-strong` is NOT a
- * real class in this theme and renders transparent.
- *
- * Drag behavior: every card drags independently. The forward-cascade
- * (children follow a parent moved forward) lives in use-group-dragndrop.
+ * DnD: every card drags independently. No "move with parent" behavior.
  */
 
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react";
 import { ChevronRight, ChevronDown, CornerDownRight } from "lucide-react";
-// plane imports
 import type { IIssueMap, TIssue } from "@plane/types";
-// local imports
 import { KanbanIssueBlock } from "./block";
 
 type Props = {
@@ -50,11 +48,9 @@ type Props = {
   sub_group_id?: string;
 };
 
-// ---- tree geometry ----
-const CHILD_WIDTH_PCT = 80; // child card width as % of the column
-const SPINE_X = 14; // px from column left to the vertical spine
-const ARROW_SIZE = 5; // px half-height of the arrowhead triangle
-const HOOK_Y = 34; // px from the top of a child row to its horizontal hook
+const SPINE_X = 14;     // px from row left to the vertical spine
+const HOOK_Y = 34;     // px from child row top to the horizontal branch
+const ARROW_SIZE = 5;  // px half-height of the arrowhead
 
 const LINE_COLOR = "var(--border-strong)";
 
@@ -93,7 +89,8 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
 
   const parentIds = useMemo(() => new Set(Object.keys(childrenByParent)), [childrenByParent]);
 
-  // Natural column order; children of an in-column parent render under it.
+  // Flat render order: parents (and standalone issues) in their natural order;
+  // children of an in-column parent are pulled out and rendered under it.
   const orderedEntries = useMemo(() => {
     const out: { issueId: string; parentId: string | null }[] = [];
     const seen = new Set<string>();
@@ -101,7 +98,7 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
       if (seen.has(id)) continue;
       const issue = issuesMap[id];
       if (!issue) continue;
-      if (issue.parent_id && parentIds.has(issue.parent_id)) continue;
+      if (issue.parent_id && parentIds.has(issue.parent_id)) continue; // rendered under its parent
       out.push({ issueId: id, parentId: issue.parent_id ?? null });
       seen.add(id);
       if (parentIds.has(id)) for (const kid of childrenByParent[id] ?? []) seen.add(kid);
@@ -114,18 +111,6 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
     if (groupId) id = `${id}__${groupId}`;
     if (sub_group_id) id = `${id}__${sub_group_id}`;
     return id;
-  };
-
-  const blockProps = {
-    issuesMap,
-    displayProperties,
-    updateIssue,
-    quickActions,
-    canDropOverIssue,
-    canDragIssuesInCurrentGrouping,
-    canEditProperties,
-    scrollableContainerRef,
-    isEpic,
   };
 
   if (orderedEntries.length === 0) return null;
@@ -141,117 +126,163 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
         const isOrphanChild = !!issue.parent_id && !parentIds.has(issue.parent_id);
 
         return (
-          <div key={buildDraggableId(issueId)} className="relative">
-            {/* orphan badge: child whose parent lives in another column */}
-            {isOrphanChild && (
-              <span
-                className="pointer-events-none absolute right-2 top-1 z-10 inline-flex items-center gap-1 rounded bg-layer-2/90 px-1.5 py-0.5 text-10 uppercase tracking-wide text-placeholder backdrop-blur-sm"
-                title={parentId ? "Parent is in another column" : "Parent is in another column"}
-              >
-                <CornerDownRight className="size-3" />
-                sub
-              </span>
-            )}
-
-            {/* parent (or standalone) card — ALWAYS full column width */}
-            <KanbanIssueBlock
-              issueId={issueId}
-              groupId={groupId}
-              subGroupId={sub_group_id}
-              shouldRenderByDefault
-              draggableId={buildDraggableId(issueId)}
-              {...blockProps}
-            />
-
-            {kids.length > 0 && (
-              <div className="relative">
-                {/* toggle row — its own relative box so the spine segment
-                    behind the toggle doesn't overshoot the last child's hook */}
-                <div className="relative">
-                  {!isCollapsed && (
-                    <span
-                      className="pointer-events-none absolute top-0 w-px"
-                      style={{ backgroundColor: LINE_COLOR, left: SPINE_X, height: "100%" }}
-                      aria-hidden
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCollapsed((prev) => ({ ...prev, [issueId]: !prev[issueId] }))}
-                    className="relative z-10 my-0.5 flex items-center gap-1 rounded-full border px-1.5 py-px text-10 font-medium text-tertiary transition-colors hover:bg-layer-1-hover hover:text-primary"
-                    style={{ marginLeft: SPINE_X - 9, borderColor: LINE_COLOR, backgroundColor: "var(--surface-2, var(--layer-1))" }}
-                    aria-label={isCollapsed ? `Expand ${kids.length} sub-work-items` : "Collapse sub-work-items"}
-                  >
-                    {isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
-                    {kids.length}
-                  </button>
-                </div>
-
-                {!isCollapsed &&
-                  kids.map((kidId, i) => {
-                    const isLast = i === kids.length - 1;
-                    return (
-                      <div key={buildDraggableId(kidId)} className="relative flex justify-end pt-1">
-                        {/* vertical spine: full height for middle children, stops at the hook on the last */}
-                        <span
-                          className="pointer-events-none absolute top-0 w-px"
-                          style={{
-                            backgroundColor: LINE_COLOR,
-                            left: SPINE_X,
-                            height: isLast ? HOOK_Y : "100%",
-                          }}
-                          aria-hidden
-                        />
-                        {/* horizontal branch from spine to the child card.
-                            Goes from spine (left: 14) to right edge of
-                            the row minus the 20% left-margin. */}
-                        <span
-                          className="pointer-events-none absolute h-px"
-                          style={{
-                            backgroundColor: LINE_COLOR,
-                            left: SPINE_X,
-                            top: HOOK_Y,
-                            right: "20%",
-                          }}
-                          aria-hidden
-                        />
-                        {/* arrowhead pointing into the child card. Sits
-                            just past the horizontal branch on the right. */}
-                        <span
-                          className="pointer-events-none absolute"
-                          style={{
-                            top: HOOK_Y - ARROW_SIZE,
-                            right: "calc(20% + 2px)",
-                            width: 0,
-                            height: 0,
-                            borderTop: `${ARROW_SIZE}px solid transparent`,
-                            borderBottom: `${ARROW_SIZE}px solid transparent`,
-                            borderLeft: `${ARROW_SIZE + 1}px solid ${LINE_COLOR}`,
-                          }}
-                          aria-hidden
-                        />
-                        {/* the child card — 80% width, right-aligned.
-                            Use margin-left (20%) instead of a wrapper div
-                            so the card itself stays as the drop target
-                            element — no wrapper to intercept events. */}
-                        <div className="ml-[20%]">
-                          <KanbanIssueBlock
-                            issueId={kidId}
-                            groupId={groupId}
-                            subGroupId={sub_group_id}
-                            shouldRenderByDefault
-                            draggableId={buildDraggableId(kidId)}
-                            {...blockProps}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
+          <ParentWithChildren
+            key={buildDraggableId(issueId)}
+            issueId={issueId}
+            kids={kids}
+            isCollapsed={isCollapsed}
+            isOrphanChild={isOrphanChild}
+            parentId={parentId}
+            onToggleCollapsed={() =>
+              setCollapsed((prev) => ({ ...prev, [issueId]: !prev[issueId] }))
+            }
+            buildDraggableId={buildDraggableId}
+            blockProps={{
+              issuesMap,
+              displayProperties,
+              updateIssue,
+              quickActions,
+              canDropOverIssue,
+              canDragIssuesInCurrentGrouping,
+              canEditProperties,
+              scrollableContainerRef,
+              isEpic,
+            }}
+            groupId={groupId}
+            sub_group_id={sub_group_id}
+          />
         );
       })}
     </>
   );
 });
+
+function ParentWithChildren(props: {
+  issueId: string;
+  kids: string[];
+  isCollapsed: boolean;
+  isOrphanChild: boolean;
+  parentId: string | null;
+  onToggleCollapsed: () => void;
+  buildDraggableId: (id: string) => string;
+  blockProps: any;
+  groupId: string;
+  sub_group_id: string;
+}) {
+  const { issueId, kids, isCollapsed, isOrphanChild, parentId, onToggleCollapsed, buildDraggableId, blockProps, groupId, sub_group_id } = props;
+
+  return (
+    <>
+      {/* parent (or standalone) card — rendered as a flat sibling, NOT
+          wrapped in a div with other content, so its own drop target is
+          untouched. */}
+      {isOrphanChild && (
+        <div className="relative">
+          <span
+            className="pointer-events-none absolute right-2 top-1 z-10 inline-flex items-center gap-1 rounded bg-layer-2/90 px-1.5 py-0.5 text-10 uppercase tracking-wide text-placeholder backdrop-blur-sm"
+            title="Parent is in another column"
+          >
+            <CornerDownRight className="size-3" />
+            sub
+          </span>
+          <KanbanIssueBlock
+            issueId={issueId}
+            groupId={groupId}
+            subGroupId={sub_group_id}
+            shouldRenderByDefault
+            draggableId={buildDraggableId(issueId)}
+            {...blockProps}
+          />
+        </div>
+      )}
+      {!isOrphanChild && (
+        <KanbanIssueBlock
+          issueId={issueId}
+          groupId={groupId}
+          subGroupId={sub_group_id}
+          shouldRenderByDefault
+          draggableId={buildDraggableId(issueId)}
+          {...blockProps}
+        />
+      )}
+
+      {kids.length > 0 && (
+        <>
+          {/* collapse toggle (its own row, no parent wrapper) */}
+          <div className="relative flex items-center" style={{ height: 22, marginLeft: SPINE_X - 9 }}>
+            <span
+              className="pointer-events-none absolute top-0 h-full w-px"
+              style={{ backgroundColor: LINE_COLOR, left: 9 }}
+              aria-hidden
+            />
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className="relative z-10 flex items-center gap-1 rounded-full border px-1.5 py-px text-10 font-medium text-tertiary transition-colors hover:bg-layer-1-hover hover:text-primary"
+              style={{ borderColor: LINE_COLOR, backgroundColor: "var(--surface-2, var(--layer-1))" }}
+              aria-label={isCollapsed ? `Expand ${kids.length} sub-work-items` : "Collapse sub-work-items"}
+            >
+              {isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+              {kids.length}
+            </button>
+          </div>
+
+          {!isCollapsed &&
+            kids.map((kidId, i) => {
+              const isLast = i === kids.length - 1;
+              return (
+                <div key={buildDraggableId(kidId)} className="relative flex justify-end pt-1">
+                  {/* vertical spine: full height for middle children, stops at the hook on the last */}
+                  <span
+                    className="pointer-events-none absolute top-0 w-px"
+                    style={{
+                      backgroundColor: LINE_COLOR,
+                      left: SPINE_X,
+                      height: isLast ? HOOK_Y : "100%",
+                    }}
+                    aria-hidden
+                  />
+                  {/* horizontal branch from spine to the child card */}
+                  <span
+                    className="pointer-events-none absolute h-px"
+                    style={{
+                      backgroundColor: LINE_COLOR,
+                      left: SPINE_X,
+                      top: HOOK_Y,
+                      right: "20%",
+                    }}
+                    aria-hidden
+                  />
+                  {/* arrowhead pointing into the child card */}
+                  <span
+                    className="pointer-events-none absolute"
+                    style={{
+                      top: HOOK_Y - ARROW_SIZE,
+                      right: "calc(20% + 2px)",
+                      width: 0,
+                      height: 0,
+                      borderTop: `${ARROW_SIZE}px solid transparent`,
+                      borderBottom: `${ARROW_SIZE}px solid transparent`,
+                      borderLeft: `${ARROW_SIZE + 1}px solid ${LINE_COLOR}`,
+                    }}
+                    aria-hidden
+                  />
+                  {/* the child card — 80% width, right-aligned */}
+                  <div className="ml-[20%]">
+                    <KanbanIssueBlock
+                      issueId={kidId}
+                      groupId={groupId}
+                      subGroupId={sub_group_id}
+                      shouldRenderByDefault
+                      draggableId={buildDraggableId(kidId)}
+                      {...blockProps}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+        </>
+      )}
+    </>
+  );
+}
