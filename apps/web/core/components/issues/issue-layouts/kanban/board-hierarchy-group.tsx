@@ -202,26 +202,23 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
                           }}
                           aria-hidden
                         />
-                        {/* horizontal branch from spine to the child card.
-                            Goes from spine (left: 14) to right edge of
-                            the row minus the 20% left-margin. */}
+                        {/* horizontal branch from spine to the child card */}
                         <span
                           className="pointer-events-none absolute h-px"
                           style={{
                             backgroundColor: LINE_COLOR,
                             left: SPINE_X,
                             top: HOOK_Y,
-                            right: "20%",
+                            width: `calc(${100 - CHILD_WIDTH_PCT}% - ${SPINE_X + ARROW_SIZE + 2}px)`,
                           }}
                           aria-hidden
                         />
-                        {/* arrowhead pointing into the child card. Sits
-                            just past the horizontal branch on the right. */}
+                        {/* arrowhead pointing into the child card */}
                         <span
                           className="pointer-events-none absolute"
                           style={{
                             top: HOOK_Y - ARROW_SIZE,
-                            right: "calc(20% + 2px)",
+                            right: `calc(${CHILD_WIDTH_PCT}% + 2px)`,
                             width: 0,
                             height: 0,
                             borderTop: `${ARROW_SIZE}px solid transparent`,
@@ -230,11 +227,8 @@ export const BoardIssueGroup = observer(function BoardIssueGroup(props: Props) {
                           }}
                           aria-hidden
                         />
-                        {/* the child card — 80% width, right-aligned.
-                            Use margin-left (20%) instead of a wrapper div
-                            so the card itself stays as the drop target
-                            element — no wrapper to intercept events. */}
-                        <div className="ml-[20%]">
+                        {/* the child card — 80% width, right-aligned */}
+                        <div style={{ width: `${CHILD_WIDTH_PCT}%` }}>
                           <KanbanIssueBlock
                             issueId={kidId}
                             groupId={groupId}

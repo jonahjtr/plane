@@ -54,20 +54,57 @@ export const useGroupIssuesDragNDrop = (
     issues: { getIssueIds, addCycleToIssue, removeCycleFromIssue, changeModulesInIssue },
     issueMap,
   } = useIssues(storeType);
-  // getStateById was used by the deferred cascade; left in to avoid a
-  // larger re-shuffle if we re-enable it.
   const { getStateById } = useProjectState();
-  // suppress unused warning
-  void getStateById;
 
-  // DK fork: forward-cascade for sub-work-items is DEFERRED.
-  // (See plan discussion — client-side cascade fights the base issue store's
-  // sub-issue filter and the drop flow, causing duplicate/lost cards.
-  // Proper implementation belongs in a server-side endpoint or webhook.
-  // For now: the hierarchy render is purely visual; every card drags
-  // independently and there is no move-with-parent behavior.)
-  const cascadeStateToChildren = (_projectId: string, _parentIssueId: string, _newStateId: string) => {
-    // no-op
+  /**
+   * DK fork: forward-cascade for sub-work-items.
+   * When a PARENT is dragged to a new state:
+   *  - moving FORWARD (target group later in the workflow): children whose
+   *    state is at-or-behind the target are pulled forward to it. Children
+   *    already ahead stay put.
+   *  - moving BACKWARD: parent moves alone, children stay.
+   */
+  const cascadeStateToChildren = (projectId: string, parentIssueId: string, newStateId: string) => {
+    if (!updateIssue) return;
+    const newState = getStateById(newStateId);
+    if (!newState) return;
+    const newOrder = STATE_GROUP_ORDER[newState.group] ?? -1;
+
+    const parent = getIssueById(parentIssueId);
+    const oldState = getStateById(parent?.state_id);
+    const oldOrder = oldState ? (STATE_GROUP_ORDER[oldState.group] ?? -1) : -1;
+    // sequence disambiguates states within the same group
+    const movingForward =
+      newOrder > oldOrder || (newOrder === oldOrder && !!oldState && newState.sequence > oldState.sequence);
+    if (!movingForward) return;
+
+    // find in-project children of this parent from the issue map
+    const childIds = Object.keys(issueMap ?? {}).filter((id) => issueMap[id]?.parent_id === parentIssueId);
+    let movedCount = 0;
+    for (const childId of childIds) {
+      const child = issueMap[childId];
+      if (!child || child.state_id === newStateId) continue;
+      const childState = getStateById(child.state_id);
+      const childOrder = childState ? (STATE_GROUP_ORDER[childState.group] ?? -1) : -1;
+      const childBehindOrEqual =
+        childOrder < newOrder ||
+        (childOrder === newOrder && !!childState && childState.sequence <= newState.sequence);
+      if (!childBehindOrEqual) continue; // child is ahead — never pull backward
+      movedCount += 1;
+      updateIssue(child.project_id ?? projectId, childId, { state_id: newStateId }).catch(() =>
+        setToast({
+          type: TOAST_TYPE.ERROR,
+          title: "Error!",
+          message: "A sub-work-item could not follow its parent",
+        })
+      );
+    }
+    if (movedCount > 0)
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: "Moved together",
+        message: `${movedCount} sub-work-item${movedCount === 1 ? "" : "s"} moved forward with the parent`,
+      });
   };
 
   /**
