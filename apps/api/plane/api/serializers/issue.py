@@ -67,13 +67,6 @@ class IssueSerializer(BaseSerializer):
         source="type", queryset=IssueType.objects.all(), required=False, allow_null=True
     )
 
-    # DK fork: list of child issue ids for kanban hierarchy rendering.
-    # Populated by the get_queryset annotation in IssueListCreateAPIEndpoint.
-    sub_issue_ids = serializers.SerializerMethodField()
-
-    def get_sub_issue_ids(self, obj):
-        return list(getattr(obj, "sub_issue_ids", []) or [])
-
     class Meta:
         model = Issue
         read_only_fields = ["id", "workspace", "project", "updated_by", "updated_at", "completed_at"]

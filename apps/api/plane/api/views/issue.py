@@ -20,14 +20,10 @@ from django.db.models import (
     Max,
     OuterRef,
     Q,
-    UUIDField,  # DK fork: for sub_issue_ids ArrayField
     Value,
     When,
     Subquery,
 )
-from django.db.models.functions import Coalesce  # DK fork: for sub_issue_ids default
-from django.contrib.postgres.aggregates import ArrayAgg  # DK fork: for sub_issue_ids
-from django.contrib.postgres.fields import ArrayField  # DK fork: for sub_issue_ids
 
 from django.utils import timezone
 from django.conf import settings
@@ -270,13 +266,6 @@ class IssueListCreateAPIEndpoint(BaseAPIView):
                 .order_by()
                 .annotate(count=Func(F("id"), function="Count"))
                 .values("count")
-            )
-            .annotate(  # DK fork: child issue ids for hierarchy rendering
-                sub_issue_ids=Coalesce(
-                    ArrayAgg("parent_issue__id", distinct=True, filter=~Q(parent_issue__id__isnull=True)),
-                    Value([]),
-                    output_field=ArrayField(UUIDField()),
-                )
             )
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(workspace__slug=self.kwargs.get("slug"))
@@ -521,13 +510,6 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                 .order_by()
                 .annotate(count=Func(F("id"), function="Count"))
                 .values("count")
-            )
-            .annotate(  # DK fork: child issue ids for hierarchy rendering
-                sub_issue_ids=Coalesce(
-                    ArrayAgg("parent_issue__id", distinct=True, filter=~Q(parent_issue__id__isnull=True)),
-                    Value([]),
-                    output_field=ArrayField(UUIDField()),
-                )
             )
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(workspace__slug=self.kwargs.get("slug"))
