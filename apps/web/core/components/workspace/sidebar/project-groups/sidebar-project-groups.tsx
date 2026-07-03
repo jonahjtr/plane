@@ -301,11 +301,8 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
             {/* tree guide line for subgroups */}
             {depth > 0 && (
               <span
-                className="absolute top-0 bottom-0 w-px"
-                style={{
-                  backgroundColor: "var(--border-strong)",
-                  left: `${8 + (depth - 1) * INDENT_PER_LEVEL + 6}px`,
-                }}
+                className="absolute top-0 bottom-0 w-px bg-strong"
+                style={{ left: `${8 + (depth - 1) * INDENT_PER_LEVEL + 6}px` }}
               />
             )}
             {/* drag handle (appears on hover, used to reorder group) */}
