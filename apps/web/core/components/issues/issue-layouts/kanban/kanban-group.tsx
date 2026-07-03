@@ -46,7 +46,6 @@ import { GroupDragOverlay } from "../group-drag-overlay";
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { KanbanQuickAddIssueButton, QuickAddIssueRoot } from "../quick-add";
 import { KanbanIssueBlocksList } from "./blocks-list";
-import { BoardIssueGroup } from "./board-hierarchy-group";
 
 interface IKanbanGroup {
   groupId: string;
@@ -71,8 +70,6 @@ interface IKanbanGroup {
   handleOnDrop: (source: GroupDropLocation, destination: GroupDropLocation) => Promise<void>;
   orderBy: TIssueOrderByOptions | undefined;
   isEpic?: boolean;
-  // DK fork: when true, render children indented under their parents
-  hierarchyEnabled?: boolean;
 }
 
 export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
@@ -97,7 +94,6 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
     scrollableContainerRef,
     handleOnDrop,
     isEpic = false,
-    hierarchyEnabled = true,
   } = props;
   // i18n
   const { t } = useTranslation();
@@ -300,37 +296,20 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
         isDraggingOverColumn={isDraggingOverColumn}
         isEpic={isEpic}
       />
-      {hierarchyEnabled ? (
-        <BoardIssueGroup
-          issueIds={issueIds || []}
-          issuesMap={issuesMap}
-          displayProperties={displayProperties}
-          updateIssue={updateIssue}
-          quickActions={quickActions}
-          canEditProperties={canEditProperties}
-          canDropOverIssue={!canOverlayBeVisible}
-          canDragIssuesInCurrentGrouping={canDragIssuesInCurrentGrouping}
-          scrollableContainerRef={scrollableContainerRef}
-          isEpic={isEpic}
-          groupId={groupId}
-          sub_group_id={sub_group_id}
-        />
-      ) : (
-        <KanbanIssueBlocksList
-          sub_group_id={sub_group_id}
-          groupId={groupId}
-          issuesMap={issuesMap}
-          issueIds={issueIds || []}
-          displayProperties={displayProperties}
-          updateIssue={updateIssue}
-          quickActions={quickActions}
-          canEditProperties={canEditProperties}
-          scrollableContainerRef={scrollableContainerRef}
-          canDropOverIssue={!canOverlayBeVisible}
-          canDragIssuesInCurrentGrouping={canDragIssuesInCurrentGrouping}
-          isEpic={isEpic}
-        />
-      )}
+      <KanbanIssueBlocksList
+        sub_group_id={sub_group_id}
+        groupId={groupId}
+        issuesMap={issuesMap}
+        issueIds={issueIds || []}
+        displayProperties={displayProperties}
+        updateIssue={updateIssue}
+        quickActions={quickActions}
+        canEditProperties={canEditProperties}
+        scrollableContainerRef={scrollableContainerRef}
+        canDropOverIssue={!canOverlayBeVisible}
+        canDragIssuesInCurrentGrouping={canDragIssuesInCurrentGrouping}
+        isEpic={isEpic}
+      />
 
       {shouldLoadMore &&
         (isSubGroup ? (

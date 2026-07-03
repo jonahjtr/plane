@@ -135,13 +135,6 @@ class IssueListEndpoint(BaseAPIView):
                 .annotate(count=Func(F("id"), function="Count"))
                 .values("count")
             )
-            .annotate(
-                sub_issue_ids=Coalesce(
-                    ArrayAgg("parent_issue__id", distinct=True, filter=~Q(parent_issue__id__isnull=True)),
-                    Value([]),
-                    output_field=ArrayField(UUIDField()),
-                )
-            )
             .distinct()
         )
 
@@ -185,7 +178,6 @@ class IssueListEndpoint(BaseAPIView):
                 "label_ids",
                 "assignee_ids",
                 "sub_issues_count",
-                "sub_issue_ids",  # DK fork: child issue ids for hierarchy rendering
                 "created_at",
                 "updated_at",
                 "created_by",

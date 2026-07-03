@@ -58,12 +58,6 @@ export type TBaseIssue = {
   attachment_count: number;
   link_count: number;
 
-  // DK fork: list of child issue ids (returned by the issue list endpoint)
-  // so the kanban can render parent/child hierarchy without a second fetch.
-  // Optional because the issue-detail store constructs TIssue objects
-  // without this field; the list endpoint is the only place that populates it.
-  sub_issue_ids?: string[] | null;
-
   project_id: string | null;
   parent_id: string | null;
   cycle_id: string | null;
