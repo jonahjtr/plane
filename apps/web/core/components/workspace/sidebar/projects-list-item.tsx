@@ -57,6 +57,7 @@ type Props = {
   disableDrop?: boolean;
   isLastChild: boolean;
   renderInExtendedSidebar?: boolean;
+  forceAccordionMode?: boolean; // DK fork: grouped sidebar forces accordion so click expands sub-nav
 };
 
 export const SidebarProjectsListItem = observer(function SidebarProjectsListItem(props: Props) {
@@ -69,6 +70,7 @@ export const SidebarProjectsListItem = observer(function SidebarProjectsListItem
     handleOnProjectDrop,
     projectListType,
     renderInExtendedSidebar = false,
+    forceAccordionMode = false,
   } = props;
   // store hooks
   const { t } = useTranslation();
@@ -260,9 +262,17 @@ export const SidebarProjectsListItem = observer(function SidebarProjectsListItem
 
   if (!project) return null;
 
-  const isAccordionMode = projectPreferences.navigationMode === "ACCORDION";
+  const isAccordionMode = forceAccordionMode || projectPreferences.navigationMode === "ACCORDION";
 
   const handleItemClick = () => {
+    if (forceAccordionMode) {
+      // DK fork (grouped sidebar): clicking a project toggles its sub-nav.
+      // When opening, also navigate to its work items.
+      const willOpen = !isProjectListOpen;
+      setIsProjectListOpen(willOpen);
+      if (willOpen) router.push(`/${workspaceSlug}/projects/${projectId}/issues`);
+      return;
+    }
     if (projectPreferences.navigationMode === "ACCORDION") {
       setIsProjectListOpen(!isProjectListOpen);
     } else {
@@ -326,7 +336,7 @@ export const SidebarProjectsListItem = observer(function SidebarProjectsListItem
             )}
             <>
               <ControlLink href={defaultTabUrl} className="flex flex-grow truncate" onClick={handleItemClick}>
-                {isAccordionMode ? (
+                {isAccordionMode && !forceAccordionMode ? (
                   <Disclosure.Button
                     as="button"
                     type="button"

@@ -10,17 +10,19 @@ import { draggable, dropTargetForElements } from "@atlaskit/pragmatic-drag-and-d
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { Disclosure, Transition } from "@headlessui/react";
-import { Plus, MoreHorizontal, Pencil, Trash2, FolderPlus, FolderInput, X, GripVertical } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, FolderPlus, FolderInput, X, GripVertical, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 // plane imports
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { ChevronRightIcon } from "@plane/propel/icons";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import { CustomMenu } from "@plane/ui";
-import { cn } from "@plane/utils";
+import { cn, orderJoinedProjects } from "@plane/utils";
 import type { TProjectGroup } from "@plane/types";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
 import { useProjectGroup } from "@/hooks/store/use-project-group";
+// components
+import { CreateProjectModal } from "@/components/project/create-project-modal";
 // local imports
 import { SidebarProjectsListItem } from "../projects-list-item";
 import { ProjectGroupModal } from "./project-group-modal";
@@ -52,32 +54,54 @@ const GroupGlyph = observer(function GroupGlyph({ group, size = 14 }: { group: T
   );
 });
 
-/** A single project row: draggable, with a hover "move to" menu. */
+/** A single project row: draggable + drop target for reordering within a group. */
 const ProjectRow = observer(function ProjectRow(props: {
   projectId: string;
   fromGroupId: string | null;
   isLastChild: boolean;
   indent: number;
+  onReorder?: (sourceProjectId: string, targetProjectId: string) => void;
 }) {
-  const { projectId, fromGroupId, isLastChild, indent } = props;
+  const { projectId, fromGroupId, isLastChild, indent, onReorder } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDropOver, setIsDropOver] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    return draggable({
-      element: el,
-      getInitialData: (): ProjectDragData => ({ type: PROJECT_DND, projectId, fromGroupId }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [projectId, fromGroupId]);
+    return combine(
+      draggable({
+        element: el,
+        getInitialData: (): ProjectDragData => ({ type: PROJECT_DND, projectId, fromGroupId }),
+        onDragStart: () => setIsDragging(true),
+        onDrop: () => setIsDragging(false),
+      }),
+      dropTargetForElements({
+        element: el,
+        canDrop: ({ source }) =>
+          isProjectDrag(source.data) &&
+          (source.data as ProjectDragData).projectId !== projectId &&
+          (source.data as ProjectDragData).fromGroupId === fromGroupId,
+        onDragEnter: () => setIsDropOver(true),
+        onDragLeave: () => setIsDropOver(false),
+        onDrop: ({ source }) => {
+          setIsDropOver(false);
+          if (isProjectDrag(source.data)) {
+            onReorder?.((source.data as ProjectDragData).projectId, projectId);
+          }
+        },
+      })
+    );
+  }, [projectId, fromGroupId, onReorder]);
 
   return (
     <div
       ref={ref}
-      className={cn("group/row relative flex items-center", { "opacity-50": isDragging })}
+      className={cn("group/row relative flex items-center", {
+        "opacity-50": isDragging,
+        "ring-1 ring-inset ring-accent-primary/40 rounded-sm": isDropOver,
+      })}
       style={{ paddingLeft: indent ? `${indent}px` : undefined }}
     >
       {/* drag handle (appears on hover) */}
@@ -92,6 +116,7 @@ const ProjectRow = observer(function ProjectRow(props: {
           disableDrag
           disableDrop
           isLastChild={isLastChild}
+          forceAccordionMode
         />
       </div>
       <div className="absolute right-1 top-1.5 hidden group-hover/row:block">
@@ -170,10 +195,13 @@ type GroupSectionProps = {
   filter: string;
   onEdit: (g: TProjectGroup) => void;
   onAddSub: (parentId: string) => void;
+  onAddProject: (groupId: string) => void;
+  forceOpen?: boolean | null; // null = no override, true = force open, false = force closed
+  onToggle?: (groupId: string, isOpen: boolean) => void;
 };
 
 const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
-  const { group, depth, filter, onEdit, onAddSub } = props;
+  const { group, depth, filter, onEdit, onAddSub, onAddProject, forceOpen, onToggle } = props;
   const { workspaceSlug } = useParams();
   const {
     getProjectIdsByGroup,
@@ -184,7 +212,20 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
     reorderGroup,
     groupMap,
   } = useProjectGroup();
-  const { getProjectById } = useProject();
+  const { getProjectById, getPartialProjectById, updateProjectView } = useProject();
+
+  const [localOpen, setLocalOpen] = useState(false); // ponytail: default collapsed per user request
+  const isOpen = forceOpen != null ? forceOpen : localOpen;
+  const toggleOpen = () => {
+    const next = !isOpen;
+    setLocalOpen(next);
+    onToggle?.(group.id, next);
+  };
+
+  // sync local state when forceOpen changes (so clicking a group after force-collapse sticks)
+  useEffect(() => {
+    if (forceOpen != null) setLocalOpen(forceOpen);
+  }, [forceOpen]);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const [isDropOver, setIsDropOver] = useState(false);
@@ -283,13 +324,28 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
     }
   };
 
+  const handleProjectReorder = (sourceId: string, targetId: string) => {
+    if (!workspaceSlug) return;
+    // Build ordered list of projects in this group
+    const projectsList = visibleProjectIds
+      .map((pid) => getPartialProjectById(pid))
+      .filter(Boolean) as import("@plane/types").TProject[];
+    const sourceIndex = visibleProjectIds.indexOf(sourceId);
+    const destinationIndex = visibleProjectIds.indexOf(targetId);
+    if (sourceIndex < 0 || destinationIndex < 0 || projectsList.length === 0) return;
+    const updatedSortOrder = orderJoinedProjects(sourceIndex, destinationIndex, sourceId, projectsList);
+    if (updatedSortOrder != null) {
+      updateProjectView(workspaceSlug.toString(), sourceId, { sort_order: updatedSortOrder }).catch(() =>
+        setToast({ type: TOAST_TYPE.ERROR, title: "Error", message: "Could not reorder project." })
+      );
+    }
+  };
+
   const count = visibleProjectIds.length;
   const headerIndent = 8 + depth * INDENT_PER_LEVEL;
 
   return (
-    <Disclosure as="div" className="flex flex-col" defaultOpen>
-      {({ open }) => (
-        <>
+    <div className="flex flex-col">
           <div
             ref={headerRef}
             className={cn(
@@ -309,18 +365,18 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
             <span className="mr-1 hidden flex-shrink-0 cursor-grab text-placeholder group-hover/header:inline-block">
               <GripVertical className="size-3.5" />
             </span>
-            <Disclosure.Button
-              as="button"
+            <button
               type="button"
+              onClick={toggleOpen}
               className="flex flex-1 items-center gap-1.5 overflow-hidden text-left"
             >
               <ChevronRightIcon
-                className={cn("size-3.5 flex-shrink-0 text-placeholder transition-transform", { "rotate-90": open })}
+                className={cn("size-3.5 flex-shrink-0 text-placeholder transition-transform", { "rotate-90": isOpen })}
               />
               <GroupGlyph group={group} size={14} />
               <span className="truncate text-13 font-semibold text-secondary">{group.name}</span>
               <span className="ml-1 flex-shrink-0 text-11 font-medium text-placeholder">{count}</span>
-            </Disclosure.Button>
+            </button>
             <CustomMenu
               customButton={
                 <span className="hidden place-items-center rounded p-0.5 text-placeholder hover:bg-layer-1-hover hover:text-secondary group-hover/header:grid">
@@ -330,6 +386,11 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
               placement="bottom-end"
               closeOnSelect
             >
+              <CustomMenu.MenuItem onClick={() => onAddProject(group.id)}>
+                <span className="flex items-center gap-2">
+                  <Plus className="size-3.5" /> Add project
+                </span>
+              </CustomMenu.MenuItem>
               <CustomMenu.MenuItem onClick={() => onEdit(group)}>
                 <span className="flex items-center gap-2">
                   <Pencil className="size-3.5" /> Edit (name, icon, color)
@@ -350,7 +411,7 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
             </CustomMenu>
           </div>
           <Transition
-            show={open}
+            show={isOpen}
             enter="transition duration-100 ease-out"
             enterFrom="transform scale-95 opacity-0"
             enterTo="transform scale-100 opacity-100"
@@ -358,7 +419,7 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
             leaveFrom="transform scale-100 opacity-100"
             leaveTo="transform scale-95 opacity-0"
           >
-            <Disclosure.Panel as="div" className="relative flex flex-col gap-0.5" static>
+            <div className="relative flex flex-col gap-0.5">
               {/* tree guide line down the project list for nested groups */}
               {depth >= 0 && visibleProjectIds.length > 0 && (
                 <span
@@ -373,6 +434,7 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
                   fromGroupId={group.id}
                   isLastChild={index === visibleProjectIds.length - 1}
                   indent={(depth + 1) * INDENT_PER_LEVEL}
+                  onReorder={handleProjectReorder}
                 />
               ))}
               {count === 0 && !filter && (
@@ -384,14 +446,12 @@ const GroupSection = observer(function GroupSection(props: GroupSectionProps) {
                 const sg = getGroupById(sid);
                 if (!sg) return null;
                 return (
-                  <GroupSection key={sid} group={sg} depth={depth + 1} filter={filter} onEdit={onEdit} onAddSub={onAddSub} />
+                  <GroupSection key={sid} group={sg} depth={depth + 1} filter={filter} onEdit={onEdit} onAddSub={onAddSub} onAddProject={onAddProject} forceOpen={forceOpen} onToggle={onToggle} />
                 );
               })}
-            </Disclosure.Panel>
+            </div>
           </Transition>
-        </>
-      )}
-    </Disclosure>
+    </div>
   );
 });
 
@@ -479,7 +539,8 @@ const UngroupedSection = observer(function UngroupedSection({ filter }: { filter
 });
 
 export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
-  const { rootGroupIds, getGroupById, loader } = useProjectGroup();
+  const { workspaceSlug } = useParams();
+  const { rootGroupIds, getGroupById, getSubgroupIds, loader } = useProjectGroup();
   const { joinedProjectIds } = useProject();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<TProjectGroup | null>(null);
@@ -502,6 +563,42 @@ export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
     setModalOpen(true);
   };
 
+  // "Add project" inside a group — opens CreateProjectModal with group pre-assigned
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [projectModalGroupId, setProjectModalGroupId] = useState<string | null>(null);
+  const openAddProject = (groupId: string) => {
+    setProjectModalGroupId(groupId);
+    setProjectModalOpen(true);
+  };
+
+  // Collapse/expand all groups
+  const [openGroupIds, setOpenGroupIds] = useState<Set<string>>(new Set());
+  const anyOpen = openGroupIds.size > 0;
+  const toggleAll = () => {
+    if (anyOpen) {
+      setOpenGroupIds(new Set());
+    } else {
+      // open all root + sub groups
+      const allIds = new Set<string>();
+      rootGroupIds.forEach((gid) => {
+        allIds.add(gid);
+        const subs = getSubgroupIds(gid);
+        subs.forEach((sid) => allIds.add(sid));
+      });
+      setOpenGroupIds(allIds);
+    }
+  };
+  const handleGroupToggle = (groupId: string, isOpen: boolean) => {
+    setOpenGroupIds((prev) => {
+      const next = new Set(prev);
+      if (isOpen) next.add(groupId);
+      else next.delete(groupId);
+      return next;
+    });
+  };
+  // ponytail: forceOpen is null (individual control) — we derive per-group from openGroupIds
+  const getForceOpen = (gid: string) => openGroupIds.has(gid);
+
   const hasAnyProjects = joinedProjectIds.length > 0;
 
   return (
@@ -512,10 +609,28 @@ export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
         group={editingGroup}
         parentId={parentForNew}
       />
+      {workspaceSlug && (
+        <CreateProjectModal
+          isOpen={projectModalOpen}
+          onClose={() => setProjectModalOpen(false)}
+          setToFavorite={false}
+          workspaceSlug={workspaceSlug.toString()}
+          data={projectModalGroupId ? { group: projectModalGroupId } : undefined}
+        />
+      )}
 
-      <div className="group flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-placeholder">
+      <div className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-placeholder">
         <span className="text-13 font-semibold text-placeholder">Projects</span>
         <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="grid h-5 w-5 place-items-center rounded text-placeholder hover:bg-layer-1-hover hover:text-secondary"
+            aria-label={anyOpen ? "Collapse all groups" : "Expand all groups"}
+            title={anyOpen ? "Collapse all" : "Expand all"}
+          >
+            {anyOpen ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
+          </button>
           <button
             type="button"
             onClick={openCreate}
@@ -525,9 +640,6 @@ export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
           >
             <Plus className="size-3.5" />
           </button>
-          <span className="hidden items-center gap-1 rounded px-1 py-0.5 text-11 font-medium text-placeholder group-hover:flex">
-            Group
-          </span>
         </div>
       </div>
 
@@ -557,7 +669,7 @@ export const SidebarProjectGroups = observer(function SidebarProjectGroups() {
           {rootGroupIds.map((gid) => {
             const g = getGroupById(gid);
             if (!g) return null;
-            return <GroupSection key={gid} group={g} depth={0} filter={filter} onEdit={openEdit} onAddSub={openAddSub} />;
+            return <GroupSection key={gid} group={g} depth={0} filter={filter} onEdit={openEdit} onAddSub={openAddSub} onAddProject={openAddProject} forceOpen={getForceOpen(gid)} onToggle={handleGroupToggle} />;
           })}
           <UngroupedSection filter={filter} />
         </>

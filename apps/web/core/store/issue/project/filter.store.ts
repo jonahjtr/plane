@@ -139,6 +139,11 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
 
     const richFilters = _filters?.rich_filters;
     const displayFilters = this.computedDisplayFilters(_filters?.display_filters);
+    // DK fork: workspace-wide layout override — all projects share the same layout
+    const globalLayout = typeof window !== "undefined" ? localStorage.getItem("dk_global_issue_layout") : null;
+    if (globalLayout && displayFilters) {
+      (displayFilters as any).layout = globalLayout;
+    }
     const displayProperties = this.computedDisplayProperties(_filters?.display_properties);
 
     // fetching the kanban toggle helpers in the local storage
@@ -206,6 +211,11 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
         case EIssueFilterType.DISPLAY_FILTERS: {
           const updatedDisplayFilters = filters as IIssueDisplayFilterOptions;
           _filters.displayFilters = { ..._filters.displayFilters, ...updatedDisplayFilters };
+
+          // DK fork: persist layout change globally so all projects use the same layout
+          if (updatedDisplayFilters.layout && typeof window !== "undefined") {
+            localStorage.setItem("dk_global_issue_layout", updatedDisplayFilters.layout);
+          }
 
           // set sub_group_by to null if group_by is set to null
           if (_filters.displayFilters.group_by === null) {
