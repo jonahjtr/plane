@@ -14,7 +14,7 @@ import { Input } from "@plane/ui";
 // components
 import { PageHead } from "@/components/core/page-title";
 import { GlobalDefaultViewListItem } from "@/components/workspace/views/default-view-list-item";
-import { GlobalViewsList } from "@/components/workspace/views/views-list";
+import { GlobalViewsList, ViewSection } from "@/components/workspace/views/views-list";
 // hooks
 import { useWorkspace } from "@/hooks/store/use-workspace";
 
@@ -41,12 +41,19 @@ function WorkspaceViewsPage() {
           />
         </div>
         <div className="vertical-scrollbar flex scrollbar-lg h-full w-full flex-col">
-          {DEFAULT_GLOBAL_VIEWS_LIST.filter((v) => t(v.i18n_label).toLowerCase().includes(query.toLowerCase())).map(
-            (option) => (
-              <GlobalDefaultViewListItem key={option.key} view={option} />
-            )
-          )}
           <GlobalViewsList searchQuery={query} />
+          {(() => {
+            const defaults = DEFAULT_GLOBAL_VIEWS_LIST.filter((v) =>
+              t(v.i18n_label).toLowerCase().includes(query.toLowerCase())
+            );
+            return defaults.length > 0 ? (
+              <ViewSection label="General" count={defaults.length} open={query.trim() !== ""}>
+                {defaults.map((option) => (
+                  <GlobalDefaultViewListItem key={option.key} view={option} />
+                ))}
+              </ViewSection>
+            ) : null;
+          })()}
         </div>
       </div>
     </>
